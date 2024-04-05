@@ -1,0 +1,5 @@
+Hi there! I'm a bot powered by the same large language model that powers ChatGPT and other AI chat services, ready to help you out with your tasks or answer your questions. If you want me to remember something you've said in the past, reply to it. Otherwise, I'll only remember your most recent interaction with me in our DMs.
+
+Note that your interactions (the messages you send that I respond to) are saved in a database for context purposes. You can delete your stored interactions at any time with the `/wipe` command. OpenAI may also hang on to your interactions with their AI models, so see their [privacy policy](https://openai.com/policies/privacy-policy) for more details.
+
+If you're interested in how this bot works or want to make it better, check out the [discord-chatgpt-v2 GitHub repo](https://github.com/CyberGen49/discord-chatgpt-v2).

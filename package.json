@@ -1,0 +1,17 @@
+{
+  "name": "discord-chatgpt-v2",
+  "version": "1.0.0",
+  "description": "A Discord bot allowing users to interact with OpenAI's LLMs",
+  "main": "bot.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "CyberGen49",
+  "license": "ISC",
+  "dependencies": {
+    "better-sqlite3": "^9.4.5",
+    "dayjs": "^1.11.10",
+    "discord.js": "^14.14.1",
+    "openai": "^4.32.2"
+  }
+}
