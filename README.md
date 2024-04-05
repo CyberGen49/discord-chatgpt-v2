@@ -18,7 +18,7 @@ This is a complete rewrite of my original [discord-chatgpt](https://github.com/C
     1. Scroll down and make sure "Message content intent" is on
 1. Set your Discord user ID in the `bot.owner_id` config field. Get this by turning on developer mode in settings and right-clicking on your profile.
 1. Make any other changes to the config file, then save it.
-1. Create the message database by running `sqlite3 main.db ".read schema.sql"`.
+1. Create the message database by running `sqlite3 storage.db ".read schema.sql"`.
 1. Register the bot's slash and context menu commands by running `node registerCommands.js`
 1. Start the bot with `node bot.js`
     * Pro tip: Install [PM2](https://pm2.keymetrics.io/docs/usage/quick-start/) and run the bot with `pm2 start`.
