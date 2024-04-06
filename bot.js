@@ -105,12 +105,14 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             }
         ];
         // If the message is a reply, use the referenced message as context
+        let inputPrefix = '';
         if (msg.type == Discord.MessageType.Reply) {
             // Attempt to find the message in the database
             const referenceMsgEntry = sqlite3('storage.db').prepare(`SELECT * FROM response_messages WHERE msg_id = ?`).get(msg.reference.messageId);
-            const interaction = sqlite3('storage.db').prepare(`SELECT * FROM interactions WHERE input_msg_id = ?`).get(referenceMsgEntry.input_msg_id);
+            const interaction = sqlite3('storage.db').prepare(`SELECT * FROM interactions WHERE input_msg_id = ?`).get(referenceMsgEntry?.input_msg_id);
             // If we found something, use both input and output as context
             if (interaction) {
+                inputPrefix = `"${referenceMsgEntry.content.length > 250 ? referenceMsgEntry.content.substring(0, 250) + '...' : referenceMsgEntry.content}"\n\n`;
                 const interactionData = JSON.parse(interaction.data);
                 const output = interactionData.pop();
                 const input = interactionData.pop();
@@ -126,11 +128,23 @@ bot.on(Discord.Events.MessageCreate, async msg => {
                 }
             // Otherwise just use the referenced message as context
             } else {
-                const input = await msg.channel.messages.fetch(msg.reference.messageId);
-                if (input) {
+                const inputMsg = await msg.channel.messages.fetch(msg.reference.messageId);
+                if (inputMsg) {
+                    const content = [
+                        { type: 'text', text: inputMsg.content }
+                    ];
+                    // Add first attached image if this is a vision model
+                    if (config.gpt.model.match(/vision/)) {
+                        for (const attachment of inputMsg.attachments.values()) {
+                            if (attachment.contentType.startsWith('image/')) {
+                                content.push({ type: 'image_url', image_url: attachment.url });
+                                console.log(`Adding image attachment to context`);
+                                break;
+                            }
+                        }
+                    }
                     messages.push({
-                        role: 'user',
-                        content: input.content
+                        role: 'user', content
                     });
                     console.log(`Loaded referenced message content for context`);
                 }
@@ -155,9 +169,22 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             }
         }
         // Add input
+        const inputContent = [
+            { type: 'text', text: inputPrefix + msg.content }
+        ];
+        // Add first attached image if this is a vision model
+        if (config.gpt.model.match(/vision/)) {
+            for (const attachment of msg.attachments.values()) {
+                if (attachment.contentType.startsWith('image/')) {
+                    inputContent.push({ type: 'image_url', image_url: attachment.url });
+                    console.log(`Adding image attachment to input`);
+                    break;
+                }
+            }
+        }
         messages.push({
             role: 'user',
-            content: msg.content
+            content: inputContent
         });
         // Send typing indicator until we stop it
         await msg.channel.sendTyping();
