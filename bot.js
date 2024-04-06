@@ -330,8 +330,14 @@ bot.on(Discord.Events.InteractionCreate, async interaction => {
     }
 });
 
-// Handle fatal errors
-process.on('unhandledRejection', async error => {
-    console.error(error);
-    process.exit(1);
-});
+// Periodically delete interactions older than config.database.message_lifetime_hours
+if (config.database.message_lifetime_hours) {
+    console.log(`Interaction auto-delete is enabled for entries older than ${config.database.message_lifetime_hours}`);
+    setInterval(() => {
+        const db = sqlite3('storage.db');
+        db.prepare(`DELETE FROM interactions WHERE time_created < ?`).run(Date.now()-(config.database.message_lifetime_hours*60*60*1000));
+        db.close();
+    }, 60*1000);
+} else {
+    console.log(`Interaction auto-delete is disabled`);
+}

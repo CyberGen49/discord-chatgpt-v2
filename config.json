@@ -20,6 +20,9 @@
         "public_usage": true,
         "owner_id": ""
     },
+    "database": {
+        "message_lifetime_hours": 72
+    },
     "messages": {
         "error_fatal": "A fatal error occurred:\n```{error}```See the console for more.",
         "error_interaction_user": "An error occurred and the bot owner has been notified. Please try again later.",
