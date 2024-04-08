@@ -5,10 +5,7 @@ CREATE TABLE IF NOT EXISTS interactions (
 	user_id	        TEXT NOT NULL,
 	channel_id	    TEXT NOT NULL,
 	input_msg_id	TEXT NOT NULL UNIQUE,
-	data    	    TEXT NOT NULL,
-    tokens_input    INTEGER,
-    tokens_output   INTEGER,
-    price           REAL
+	data    	    TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS response_messages (
@@ -24,5 +21,10 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE TABLE IF NOT EXISTS stats (
 	user_id			TEXT NOT NULL,
-	time_created	INTEGER NOT NULL
+	time_created	INTEGER NOT NULL,
+	type			TEXT NOT NULL,
+	tokens_in		INTEGER,
+	tokens_out		INTEGER,
+	price			REAL,
+	function_name	TEXT
 );

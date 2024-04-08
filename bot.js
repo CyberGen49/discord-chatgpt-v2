@@ -264,7 +264,7 @@ bot.on(Discord.Events.MessageCreate, async msg => {
         db.prepare(`INSERT INTO interactions (time_created, user_id, channel_id, input_msg_id, data) VALUES (?, ?, ?, ?, ?)`).run(Date.now(), msg.author.id, msg.channel.id, msg.id, JSON.stringify(messages));
         console.log(`Saved interaction to database`);
         // Save stat entry
-        db.prepare(`INSERT INTO stats (time_created, user_id) VALUES (?, ?)`).run(Date.now(), msg.author.id);
+        db.prepare(`INSERT INTO stats (time_created, user_id, type) VALUES (?, ?, ?)`).run(Date.now(), msg.author.id, 'message');
         db.close();
         updateStatus();
     } catch (error) {
@@ -293,7 +293,7 @@ bot.on(Discord.Events.InteractionCreate, async interaction => {
         }
     }
     if (interaction.isContextMenuCommand()) {
-        const file = `./contextItems/${interaction.commandName}.js`;
+        const file = `./context-items/${interaction.commandName}.js`;
         if (fs.existsSync(file)) {
             const cmd = require(file);
             await cmd.handler(interaction);

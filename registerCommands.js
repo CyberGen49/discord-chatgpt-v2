@@ -9,9 +9,9 @@ async function main() {
         const cmd = require(`./commands/${file}`);
         builders.push(cmd.builder);
     }
-    for (const file of fs.readdirSync('./contextItems')) {
+    for (const file of fs.readdirSync('./context-items')) {
         if (!file.match(/\.js$/)) continue;
-        const cmd = require(`./contextItems/${file}`);
+        const cmd = require(`./context-items/${file}`);
         builders.push(cmd.builder);
     }
     // Register slash commands with Discord

@@ -6,7 +6,7 @@ module.exports = {
             'bot.js',
             'config.json',
             './commands/*',
-            './contextItems/*'
+            './context-items/*'
         ]
     }]
 };
