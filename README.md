@@ -49,4 +49,6 @@ The bot can be configured by editing the `config.json` file, as you did during s
     - object `status`: Contains settings for the bot's activity status
         - string `type`: Set to `Playing`, `Watching`, or `Listening`, determines the part in bold at the beginning of the status
         - string `text`: The text following the activity type. `{messages_month}` is replaced with the number of messages sent to the bot this month, and `{messages_total}` is replaced with the number of messages sent to the bot in total.
+- object `database`: Contains settings related to the storage database
+    - number `message_lifetime_hours`: The maximum age a stored user-bot interaction will be stored before being deleted from the database. Setting this to a false value will disable interaction auto-deletion.
 - object `messages`: Contains settings for every user-facing message sent by the bot. These aren't be listed here. Use each key's name and existing value to determine its purpose.
