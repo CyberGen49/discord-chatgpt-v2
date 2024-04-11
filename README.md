@@ -26,3 +26,27 @@ This is a complete rewrite of my original [discord-chatgpt](https://github.com/C
 1. Try it out by DMing or pinging the bot with a question!
 
 As the owner, you're always allowed to use the bot, but with `config.bot.public_usage` disabled, nobody else will be able to. If a disallowed user tries using the bot, you'll get a DM with a button to allow them. You can also manage users manually with the `/users allow`, `/users block`, and `/users unlist` commands.
+
+### Configuration
+The bot can be configured by editing the `config.json` file, as you did during setup. All config options are as follows:
+
+- object `credentials`: Contains authentication settings
+    - string `openai_secret`: Your OpenAI API key
+    - string `discord_bot_token`: Your Discord bot's token
+    - string `discord_application_id`: Your Discord application/client ID
+- object `gpt`: Contains language model settings
+    - string `model`: One of OpenAI's [models](https://platform.openai.com/docs/models/overview) (specifically the newer GPT models)
+    - object `price`: Contains model price information
+        - number `input_token`: The calculated price for a single input token
+        - number `output_token`: The calculated price for a single output token
+    - number `max_tokens`: The maximum number of tokens (used as the `max_tokens` API parameter)
+    - array `messages[]`: A list of messages to be inserted at the beginning of every API request
+        - string `role`: Set to `system`, `assistant`, or `user`. `system` messages can be used to influence the model's behavior and give it information, `assistant` messages are those sent by the model, and `user` messages are those sent by the user.
+        - string `content`: The message's text content
+- object `bot`: Contains settings for the Discord bot
+    - boolean `public_usage`: Determines whether or not anyone can use the bot. When this is `true`, everyone but people blocked with `/users block` can use the bot. When this is `false`, only people allowed with `/users allow` can use the bot.
+    - string `owner_id`: The Discord user ID of the bot maintainer (you, most likely). Only this user can use admin commands like `/users`.
+    - object `status`: Contains settings for the bot's activity status
+        - string `type`: Set to `Playing`, `Watching`, or `Listening`, determines the part in bold at the beginning of the status
+        - string `text`: The text following the activity type. `{messages_month}` is replaced with the number of messages sent to the bot this month, and `{messages_total}` is replaced with the number of messages sent to the bot in total.
+- object `messages`: Contains settings for every user-facing message sent by the bot. These aren't be listed here. Use each key's name and existing value to determine its purpose.

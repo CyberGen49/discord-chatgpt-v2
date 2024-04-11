@@ -35,10 +35,19 @@ const bot = new Discord.Client({
 
 const updateStatus = () => {
     const startOfMonth = dayjs().startOf('month').unix()*1000;
-    const count = db(db => db.prepare(`SELECT COUNT(*) FROM stats WHERE time_created > ?`).get(startOfMonth)['COUNT(*)']);
+    const countMonth = db(db => db.prepare(`SELECT COUNT(*) FROM stats WHERE time_created > ?`).get(startOfMonth)['COUNT(*)']);
+    const countTotal = db(db => db.prepare(`SELECT COUNT(*) FROM stats`).get()['COUNT(*)']);
+    const placeholders = {
+        '{messages_month}': countMonth,
+        '{messages_total}': countTotal
+    };
+    let text = config.bot.status.text;
+    for (const placeholder in placeholders) {
+        text = text.replace(placeholder, placeholders[placeholder]);
+    }
     bot.user.setActivity({
-        name: `${count} messages this month`,
-        type: Discord.ActivityType.Watching
+        name: text,
+        type: Discord.ActivityType[config.bot.status.type]
     });
 };
 
@@ -186,11 +195,6 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             role: 'user',
             content: inputContent
         });
-        // Send typing indicator until we stop it
-        await msg.channel.sendTyping();
-        const typingInterval = setInterval(() => {
-            msg.channel.sendTyping();
-        }, 5000);
         // This function handles sending and saving messages
         const sendMessage = async(content, typing) => {
             if (!content) return;
@@ -203,58 +207,68 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             db.close();
             console.log(`Sent and saved response chunk to database`);
         };
-        // Stream response from OpenAI
-        const stream = await openai.chat.completions.create({
-            model: config.gpt.model,
-            max_tokens: config.gpt.max_tokens,
-            messages,
-            stream: true
-        });
+        // Stream and send response from OpenAI
         let response = '';
-        let pendingResponse = '';
-        for await (const chunkData of stream) {
-            const chunk = chunkData.choices[0].delta.content || '';
-            response += chunk;
-            pendingResponse += chunk;
-            // Send if response is too long
-            if (pendingResponse.length > 1900) {
-                const response = pendingResponse.slice(0, 1900).trim();
-                pendingResponse = pendingResponse.slice(1900);
-                await sendMessage(response, true);
-                continue;
-            }
-            // Send code block responses
-            const singleNewlineSplit = pendingResponse.split('\n');
-            let tripleBacktickCount = 0;
-            const codeBlockLines = [];
-            let shouldContinue = false;
-            while (singleNewlineSplit.length) {
-                const line = singleNewlineSplit.shift();
-                codeBlockLines.push(line);
-                if (line.includes('```')) {
-                    tripleBacktickCount++;
-                    if (tripleBacktickCount % 2 == 0) {
-                        const response = codeBlockLines.join('\n');
-                        pendingResponse = singleNewlineSplit.join('\n');
-                        await sendMessage(response, true);
+        const respond = async() => {
+            // Send typing indicator until we stop it
+            await msg.channel.sendTyping();
+            const typingInterval = setInterval(() => {
+                msg.channel.sendTyping();
+            }, 5000);
+            // Get response stream
+            const stream = await openai.chat.completions.create({
+                model: config.gpt.model,
+                max_tokens: config.gpt.max_tokens,
+                messages,
+                stream: true
+            });
+            let pendingResponse = '';
+            // Handle response chunks as they come in
+            for await (const chunkData of stream) {
+                const chunk = chunkData.choices[0].delta.content || '';
+                response += chunk;
+                pendingResponse += chunk;
+                // Send if response is too long
+                if (pendingResponse.length > 1900) {
+                    const response = pendingResponse.slice(0, 1900).trim();
+                    pendingResponse = pendingResponse.slice(1900);
+                    await sendMessage(response, true);
+                    continue;
+                }
+                // Send code block responses
+                const singleNewlineSplit = pendingResponse.split('\n');
+                let tripleBacktickCount = 0;
+                const codeBlockLines = [];
+                let shouldContinue = false;
+                while (singleNewlineSplit.length) {
+                    const line = singleNewlineSplit.shift();
+                    codeBlockLines.push(line);
+                    if (line.includes('```')) {
+                        tripleBacktickCount++;
+                        if (tripleBacktickCount % 2 == 0) {
+                            const response = codeBlockLines.join('\n');
+                            pendingResponse = singleNewlineSplit.join('\n');
+                            await sendMessage(response, true);
+                        }
+                        shouldContinue = true;
                     }
-                    shouldContinue = true;
+                }
+                if (shouldContinue) continue;
+                // Send paragraph responses
+                const doubleNewlineSplit = pendingResponse.split('\n\n');
+                if (doubleNewlineSplit.length > 1) {
+                    const response = doubleNewlineSplit.shift().trim();
+                    pendingResponse = doubleNewlineSplit.filter(Boolean).join('\n\n');
+                    await sendMessage(response, true);
+                    continue;
                 }
             }
-            if (shouldContinue) continue;
-            // Send paragraph responses
-            const doubleNewlineSplit = pendingResponse.split('\n\n');
-            if (doubleNewlineSplit.length > 1) {
-                const response = doubleNewlineSplit.shift().trim();
-                pendingResponse = doubleNewlineSplit.filter(Boolean).join('\n\n');
-                await sendMessage(response, true);
-                continue;
-            }
-        }
-        // Stop typing indicator
-        clearInterval(typingInterval);
-        // Send leftover response
-        if (pendingResponse) await sendMessage(pendingResponse.trim());
+            // Stop typing indicator
+            clearInterval(typingInterval);
+            // Send leftover response
+            if (pendingResponse) await sendMessage(pendingResponse.trim());
+        };
+        await respond();
         // Save interaction to database
         messages.push({
             role: 'assistant',

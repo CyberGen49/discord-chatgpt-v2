@@ -18,7 +18,11 @@
     },
     "bot": {
         "public_usage": true,
-        "owner_id": ""
+        "owner_id": "",
+        "status": {
+            "type": "Watching",
+            "text": "{messages_month} messages this month"
+        }
     },
     "database": {
         "message_lifetime_hours": 72
