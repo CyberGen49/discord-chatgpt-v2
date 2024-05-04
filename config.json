@@ -14,7 +14,8 @@
         "messages": [{
             "role": "system",
             "content": "You are a friendly and helpful Discord bot."
-        }]
+        }],
+        "vision": false
     },
     "bot": {
         "public_usage": true,
@@ -22,14 +23,15 @@
         "status": {
             "type": "Watching",
             "text": "{messages_month} messages this month"
-        }
+        },
+        "split_responses": true
     },
     "database": {
         "message_lifetime_hours": 72
     },
     "messages": {
         "error_fatal": "A fatal error occurred:\n```{error}```See the console for more.",
-        "error_interaction_user": "An error occurred and the bot owner has been notified. Please try again later.",
+        "error_interaction_user": "An error occurred and the bot owner has been notified. If this issue continues, try using /wipe to clear your saved interactions.",
         "error_interaction_owner": "An error occurred during an interaction:\n```{error}```See the console for more.",
         "error_owner_only": "Only the bot owner can use this command.",
         "error_user_busy": "You already have an interaction in progress. Wait for it to finish before interacting again.",

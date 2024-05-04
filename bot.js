@@ -102,6 +102,7 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             return msg.channel.send(config.messages.error_user_blocked);
         }
     }
+    let typingInterval;
     try {
         busyUsers[msg.author.id] = true;
         // Build messages object
@@ -142,13 +143,12 @@ bot.on(Discord.Events.MessageCreate, async msg => {
                     const content = [
                         { type: 'text', text: inputMsg.content }
                     ];
-                    // Add first attached image if this is a vision model
-                    if (config.gpt.model.match(/vision/)) {
+                    // Add attached images if this is a vision model
+                    if (config.gpt.vision) {
                         for (const attachment of inputMsg.attachments.values()) {
                             if (attachment.contentType.startsWith('image/')) {
-                                content.push({ type: 'image_url', image_url: attachment.url });
+                                content.push({ type: 'image_url', image_url: { url: attachment.url } });
                                 console.log(`Adding image attachment to context`);
-                                break;
                             }
                         }
                     }
@@ -166,6 +166,22 @@ bot.on(Discord.Events.MessageCreate, async msg => {
                 const output = interactionData.pop();
                 const input = interactionData.pop();
                 if (output?.content && input?.content) {
+                    // Remove outdated images
+                    for (let i = 0; i < input.content.length; i++) {
+                        const segment = input.content[i];
+                        if (segment.type == 'image_url') {
+                            const url = segment.image_url.url;
+                            const res = await fetch(url, {
+                                method: 'HEAD'
+                            });
+                            if (!res.ok) {
+                                console.log(`Removing expired image attachment from context`);
+                                input.content.splice(i, 1);
+                                i--;
+                            }
+                        }
+                    }
+                    // Push context
                     messages.push({
                         role: 'user',
                         content: input.content
@@ -181,13 +197,12 @@ bot.on(Discord.Events.MessageCreate, async msg => {
         const inputContent = [
             { type: 'text', text: inputPrefix + msg.content }
         ];
-        // Add first attached image if this is a vision model
-        if (config.gpt.model.match(/vision/)) {
+        // Add attached images if this is a vision model
+        if (config.gpt.vision) {
             for (const attachment of msg.attachments.values()) {
                 if (attachment.contentType.startsWith('image/')) {
-                    inputContent.push({ type: 'image_url', image_url: attachment.url });
+                    inputContent.push({ type: 'image_url', image_url: { url: attachment.url } });
                     console.log(`Adding image attachment to input`);
-                    break;
                 }
             }
         }
@@ -199,7 +214,10 @@ bot.on(Discord.Events.MessageCreate, async msg => {
         const sendMessage = async(content, typing) => {
             if (!content) return;
             // Send message
-            const responseMsg = await msg.channel.send(content);
+            const responseMsg = await msg.channel.send({
+                content,
+                allowedMentions: { parse: [] }
+            });
             if (typing) await msg.channel.sendTyping();
             const db = sqlite3('storage.db');
             // Save message
@@ -212,7 +230,7 @@ bot.on(Discord.Events.MessageCreate, async msg => {
         const respond = async() => {
             // Send typing indicator until we stop it
             await msg.channel.sendTyping();
-            const typingInterval = setInterval(() => {
+            typingInterval = setInterval(() => {
                 msg.channel.sendTyping();
             }, 5000);
             // Get response stream
@@ -235,6 +253,8 @@ bot.on(Discord.Events.MessageCreate, async msg => {
                     await sendMessage(response, true);
                     continue;
                 }
+                // Don't do any splitting if disabled
+                if (!config.bot.split_responses) continue;
                 // Send code block responses
                 const singleNewlineSplit = pendingResponse.split('\n');
                 let tripleBacktickCount = 0;
@@ -283,6 +303,7 @@ bot.on(Discord.Events.MessageCreate, async msg => {
         updateStatus();
     } catch (error) {
         console.error(error);
+        clearInterval(typingInterval);
         const owner = bot.users.cache.get(config.bot.owner_id);
         owner.send(config.messages.error_interaction_owner.replace(/\{error\}/g, error.stack || error.toString()));
         msg.channel.send(config.messages.error_interaction_user);

@@ -15,7 +15,6 @@ module.exports = {
             const part = db.prepare(`SELECT * FROM response_messages WHERE msg_id = ?`).get(interaction.targetId);
             entry = db.prepare(`SELECT * FROM interactions WHERE input_msg_id = ?`).get(part.input_msg_id);
         }
-        db.close();
         // If it doesn't exist, give up
         if (!entry) {
             await interaction.reply({
@@ -23,6 +22,9 @@ module.exports = {
                 ephemeral: true
             });
         }
+        // Get interaction response parts
+        entry.response_msgs = db.prepare(`SELECT msg_id, content FROM response_messages WHERE input_msg_id = ?`).all(entry.input_msg_id);
+        db.close();
         // Convert stored data to JSON
         entry.data = JSON.parse(entry.data);
         // Respond with JSON file
