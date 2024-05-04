@@ -118,9 +118,9 @@ bot.on(Discord.Events.MessageCreate, async msg => {
         let inputPrefix = '';
         if (msg.type == Discord.MessageType.Reply) {
             // Attempt to find the message in the database
-            const referenceMsgEntry = sqlite3('storage.db').prepare(`SELECT * FROM response_messages WHERE msg_id = ?`).get(msg.reference.messageId);
-            const partsCount = sqlite3('storage.db').prepare(`SELECT COUNT(*) FROM response_messages WHERE input_msg_id = ?`).get(referenceMsgEntry?.input_msg_id)['COUNT(*)'];
-            const interaction = sqlite3('storage.db').prepare(`SELECT * FROM interactions WHERE input_msg_id = ?`).get(referenceMsgEntry?.input_msg_id);
+            const referenceMsgEntry = db(db => db.prepare(`SELECT * FROM response_messages WHERE msg_id = ?`).get(msg.reference.messageId));
+            const partsCount = db(db => db.prepare(`SELECT COUNT(*) FROM response_messages WHERE input_msg_id = ?`).get(referenceMsgEntry?.input_msg_id)['COUNT(*)']);
+            const interaction = db(db => db.prepare(`SELECT * FROM interactions WHERE input_msg_id = ?`).get(referenceMsgEntry?.input_msg_id));
             // If we found something, use both input and output as context
             if (interaction) {
                 // Set input prefix if message has multiple parts
@@ -164,7 +164,7 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             }
         } else if (!msg.guild) {
             // Use previous DM interaction as context
-            const interaction = sqlite3('storage.db').prepare(`SELECT * FROM interactions WHERE user_id = ? AND channel_id = ? ORDER BY time_created DESC LIMIT 1`).get(msg.author.id, msg.channel.id);
+            const interaction = db(db => db.prepare(`SELECT * FROM interactions WHERE user_id = ? AND channel_id = ? ORDER BY time_created DESC LIMIT 1`).get(msg.author.id, msg.channel.id));
             if (interaction) {
                 const interactionData = JSON.parse(interaction.data);
                 const output = interactionData.pop();
@@ -223,10 +223,8 @@ bot.on(Discord.Events.MessageCreate, async msg => {
                 allowedMentions: { parse: [] }
             });
             if (typing) await msg.channel.sendTyping();
-            const db = sqlite3('storage.db');
             // Save message
-            db.prepare(`INSERT INTO response_messages (input_msg_id, msg_id, content) VALUES (?, ?, ?)`).run(msg.id, responseMsg.id, content);
-            db.close();
+            db(db => db.prepare(`INSERT INTO response_messages (input_msg_id, msg_id, content) VALUES (?, ?, ?)`).run(msg.id, responseMsg.id, content));
             console.log(`Sent and saved response chunk to database`);
         };
         // Stream and send response from OpenAI
@@ -298,12 +296,10 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             role: 'assistant',
             content: response
         });
-        const db = sqlite3('storage.db');
-        db.prepare(`INSERT INTO interactions (time_created, user_id, channel_id, input_msg_id, data) VALUES (?, ?, ?, ?, ?)`).run(Date.now(), msg.author.id, msg.channel.id, msg.id, JSON.stringify(messages));
+        db(db => db.prepare(`INSERT INTO interactions (time_created, user_id, channel_id, input_msg_id, data) VALUES (?, ?, ?, ?, ?)`).run(Date.now(), msg.author.id, msg.channel.id, msg.id, JSON.stringify(messages)));
         console.log(`Saved interaction to database`);
         // Save stat entry
-        db.prepare(`INSERT INTO stats (time_created, user_id, type) VALUES (?, ?, ?)`).run(Date.now(), msg.author.id, 'message');
-        db.close();
+        db(db => db.prepare(`INSERT INTO stats (time_created, user_id, type) VALUES (?, ?, ?)`).run(Date.now(), msg.author.id, 'message'));
         updateStatus();
     } catch (error) {
         console.error(error);
@@ -373,9 +369,7 @@ bot.on(Discord.Events.InteractionCreate, async interaction => {
 if (config.database.message_lifetime_hours) {
     console.log(`Interaction auto-delete is enabled for entries older than ${config.database.message_lifetime_hours}`);
     setInterval(() => {
-        const db = sqlite3('storage.db');
-        db.prepare(`DELETE FROM interactions WHERE time_created < ?`).run(Date.now()-(config.database.message_lifetime_hours*60*60*1000));
-        db.close();
+        db(db => db.prepare(`DELETE FROM interactions WHERE time_created < ?`).run(Date.now()-(config.database.message_lifetime_hours*60*60*1000)));
     }, 60*1000);
 } else {
     console.log(`Interaction auto-delete is disabled`);
