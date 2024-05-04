@@ -12,6 +12,11 @@ const openai = new OpenAI({
 
 const busyUsers = {};
 
+/**
+ * This function creates a database connection, passes it to a callback, and closes it afterwards.
+ * @param {function} cb A callback to receive the database object
+ * @returns Whatever the callback returns
+ */
 const db = cb => {
     const db = sqlite3('storage.db');
     const res = cb(db);
