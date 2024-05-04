@@ -119,10 +119,14 @@ bot.on(Discord.Events.MessageCreate, async msg => {
         if (msg.type == Discord.MessageType.Reply) {
             // Attempt to find the message in the database
             const referenceMsgEntry = sqlite3('storage.db').prepare(`SELECT * FROM response_messages WHERE msg_id = ?`).get(msg.reference.messageId);
+            const partsCount = sqlite3('storage.db').prepare(`SELECT COUNT(*) FROM response_messages WHERE input_msg_id = ?`).get(referenceMsgEntry?.input_msg_id)['COUNT(*)'];
             const interaction = sqlite3('storage.db').prepare(`SELECT * FROM interactions WHERE input_msg_id = ?`).get(referenceMsgEntry?.input_msg_id);
             // If we found something, use both input and output as context
             if (interaction) {
-                inputPrefix = `"${referenceMsgEntry.content.length > 250 ? referenceMsgEntry.content.substring(0, 250) + '...' : referenceMsgEntry.content}"\n\n`;
+                // Set input prefix if message has multiple parts
+                if (partsCount > 1) {
+                    inputPrefix = `"${referenceMsgEntry.content.length > 250 ? referenceMsgEntry.content.substring(0, 250) + '...' : referenceMsgEntry.content}"\n\n`;
+                }
                 const interactionData = JSON.parse(interaction.data);
                 const output = interactionData.pop();
                 const input = interactionData.pop();
