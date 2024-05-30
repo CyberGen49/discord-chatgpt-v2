@@ -1,6 +1,8 @@
 # discord-chatgpt-v2
 A Discord bot allowing users to interact with OpenAI's large-language models.
 
+![Sample](/sample.png)
+
 This is a complete rewrite of my original [discord-chatgpt](https://github.com/CyberGen49/discord-chatgpt) bot, updated for simplicity with some additional features requested by users.
 
 ## Running the bot
