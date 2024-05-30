@@ -1,15 +1,15 @@
 # discord-chatgpt-v2
 A Discord bot allowing users to interact with OpenAI's large-language models.
 
-This is a complete rewrite of my original [discord-chatgpt](https://github.com/CyberGen49/discord-chatgpt) bot, updated for efficiency and simplicity.
+This is a complete rewrite of my original [discord-chatgpt](https://github.com/CyberGen49/discord-chatgpt) bot, updated for simplicity with some additional features requested by users.
 
 ## Running the bot
 1. [Download and install Node.js](https://nodejs.org/en/download/) if you don't have it
 1. [Download and install SQLite](https://www.sqlite.org/download.html) if you don't have it
 1. Clone (or download and unzip) the repository and `cd` into it with your terminal
 1. Run `npm install`
-1. [Generate an OpenAI secret key](https://platform.openai.com/account/api-keys) and paste it in the `credentials.openai_secret` config field
-    * Note: Using OpenAI's APIs isn't free. See their [pricing](https://openai.com/pricing) for more info.
+1. [Generate an OpenAI API key](https://platform.openai.com/account/api-keys) and paste it in the `credentials.openai_secret` config field
+    * **Note:** Using OpenAI's APIs isn't free. See their [pricing](https://openai.com/pricing) for more info.
 1. [Create a new Discord application](https://discord.com/developers/applications)
     1. Set its name, description, and picture
     1. Copy the Application ID and paste it in the `credentials.discord_application_id` config field
@@ -50,6 +50,7 @@ The bot can be configured by editing the `config.json` file, as you did during s
         - string `type`: Set to `Playing`, `Watching`, or `Listening`, determines the part in bold at the beginning of the status
         - string `text`: The text following the activity type. `{messages_month}` is replaced with the number of messages sent to the bot this month, and `{messages_total}` is replaced with the number of messages sent to the bot in total.
     - boolean `split_responses`: Determines whether or not model responses are split and sent by paragraph. When this is `false`, the model's response will be sent as a single message instead of several smaller messages. Responses will still be split if they exceed Discord's character limit.
+    - number `response_part_min_delay`: The minimum number of milliseconds of delay that should exist between sending message parts. This will not impact the speed at which the response is generated, only how fast it's sent. Low numbers for this option might lead to the bot hitting rate limits, causing uneven and extended delays.
 - object `database`: Contains settings related to the storage database
     - number `message_lifetime_hours`: The maximum age a stored user-bot interaction will be stored before being deleted from the database. Setting this to a false value will disable interaction auto-deletion.
 - object `messages`: Contains settings for every user-facing message sent by the bot. These aren't be listed here. Use each key's name and existing value to determine its purpose.
