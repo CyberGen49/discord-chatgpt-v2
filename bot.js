@@ -63,7 +63,14 @@ bot.on(Discord.Events.ClientReady, () => {
     updateStatus();
 });
 
+const channelActivity = {};
+
 bot.on(Discord.Events.MessageCreate, async msg => {
+    // Update channel activity timestamp
+    channelActivity[msg.channel.id] = msg.createdAt.getTime();
+    const getLastActivityTime = () => {
+        return channelActivity[msg.channel.id] || 0;
+    };
     // If the message isn't a normal text message, ignore it
     if (msg.type != Discord.MessageType.Default && msg.type != Discord.MessageType.Reply) return;
     // If the message is from a bot, ignore it
@@ -76,6 +83,8 @@ bot.on(Discord.Events.MessageCreate, async msg => {
     console.log(`Handling message from ${msg.author.tag}`);
     // If the user already has an interaction in progress, stop here
     if (busyUsers[msg.author.id]) {
+        msg.react('❌').catch(() => null);
+        return; // Disabled for now, gets annoying
         return msg.channel.send(config.messages.error_user_busy);
     }
     // Handle allowed/blocked users
@@ -219,22 +228,50 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             role: 'user',
             content: inputContent
         });
-        // This function handles sending and saving messages
-        const sendMessage = async(content, typing) => {
-            if (!content) return;
-            // Send message
-            const responseMsg = await msg.channel.send({
-                content,
-                allowedMentions: { parse: [] }
+        // Handle sending and saving messages
+        let msgSendQueue = [];
+        let lastMsgId = msg.id;
+        let lastMsgSendTime = 0;
+        let isGenerationFinished = false;
+        let isSendingFinished = false;
+        let msgSendInterval = setInterval(() => {
+            if (isGenerationFinished && msgSendQueue.length == 0) {
+                clearInterval(msgSendInterval);
+                isSendingFinished = true;
+                return;
+            }
+            if (msgSendQueue.length == 0) {
+                return;
+            }
+            if ((Date.now()-lastMsgSendTime) < config.bot.response_part_min_delay) {
+                return;
+            }
+            lastMsgSendTime = Date.now();
+            msgSendQueue.shift()();
+        }, 100);
+        const queueMsgSend = (content, typing) => {
+            msgSendQueue.push(async() => {
+                if (!content) return;
+                // Send message
+                const args = { content, allowedMentions: { parse: [] } };
+                const lastMsg = await msg.channel.messages.fetch(lastMsgId).catch(() => null);
+                let responseMsg;
+                if (lastMsg && (getLastActivityTime() > lastMsg.createdAt.getTime())) {
+                    responseMsg = await lastMsg.reply(args);
+                } else {
+                    responseMsg = await msg.channel.send(args);
+                }
+                lastMsgId = responseMsg.id;
+                if (typing) await msg.channel.sendTyping();
+                // Save message
+                db(db => db.prepare(`INSERT INTO response_messages (input_msg_id, msg_id, content) VALUES (?, ?, ?)`).run(msg.id, responseMsg.id, content));
+                console.log(`Sent and saved response chunk to database`);
             });
-            if (typing) await msg.channel.sendTyping();
-            // Save message
-            db(db => db.prepare(`INSERT INTO response_messages (input_msg_id, msg_id, content) VALUES (?, ?, ?)`).run(msg.id, responseMsg.id, content));
-            console.log(`Sent and saved response chunk to database`);
+            console.log(`Response chunk queued for sending`);
         };
-        // Stream and send response from OpenAI
+        // Stream and queue sending of model response
         let response = '';
-        const respond = async() => {
+        const generate = async() => {
             // Send typing indicator until we stop it
             await msg.channel.sendTyping();
             typingInterval = setInterval(() => {
@@ -253,16 +290,16 @@ bot.on(Discord.Events.MessageCreate, async msg => {
                 const chunk = chunkData.choices[0].delta.content || '';
                 response += chunk;
                 pendingResponse += chunk;
-                // Send if response is too long
+                // Queue if response is too long
                 if (pendingResponse.length > 1900) {
                     const response = pendingResponse.slice(0, 1900).trim();
                     pendingResponse = pendingResponse.slice(1900);
-                    await sendMessage(response, true);
+                    queueMsgSend(response, true);
                     continue;
                 }
                 // Don't do any splitting if disabled
                 if (!config.bot.split_responses) continue;
-                // Send code block responses
+                // Queue code block responses
                 const singleNewlineSplit = pendingResponse.split('\n');
                 let tripleBacktickCount = 0;
                 const codeBlockLines = [];
@@ -275,27 +312,37 @@ bot.on(Discord.Events.MessageCreate, async msg => {
                         if (tripleBacktickCount % 2 == 0) {
                             const response = codeBlockLines.join('\n');
                             pendingResponse = singleNewlineSplit.join('\n');
-                            await sendMessage(response, true);
+                            queueMsgSend(response, true);
                         }
                         shouldContinue = true;
                     }
                 }
                 if (shouldContinue) continue;
-                // Send paragraph responses
+                // Queue paragraph responses
                 const doubleNewlineSplit = pendingResponse.split('\n\n');
                 if (doubleNewlineSplit.length > 1) {
                     const response = doubleNewlineSplit.shift().trim();
                     pendingResponse = doubleNewlineSplit.filter(Boolean).join('\n\n');
-                    await sendMessage(response, true);
+                    queueMsgSend(response, true);
                     continue;
                 }
             }
             // Stop typing indicator
             clearInterval(typingInterval);
-            // Send leftover response
-            if (pendingResponse) await sendMessage(pendingResponse.trim());
+            // Queue leftover response
+            if (pendingResponse) queueMsgSend(pendingResponse.trim());
         };
-        await respond();
+        await generate();
+        isGenerationFinished = true;
+        // Wait for sending to finish
+        await new Promise(resolve => {
+            const interval = setInterval(() => {
+                if (isSendingFinished) {
+                    clearInterval(interval);
+                    resolve();
+                }
+            }, 100);
+        });
         // Save interaction to database
         messages.push({
             role: 'assistant',

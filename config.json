@@ -24,7 +24,8 @@
             "type": "Watching",
             "text": "{messages_month} messages this month"
         },
-        "split_responses": true
+        "split_responses": true,
+        "response_part_min_delay": 1000
     },
     "database": {
         "message_lifetime_hours": 72
