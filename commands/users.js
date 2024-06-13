@@ -69,16 +69,26 @@ module.exports = {
                 });
                 break;
             case 'list':
+                const users = db.prepare(`SELECT * FROM users`).all();
+                const allowedList = [];
+                const blockedList = [];
+                for (const entry of users) {
+                    const tag = `<@${entry.user_id}>`;
+                    if (entry.is_allowed)
+                        allowedList.push(tag);
+                    else
+                        blockedList.push(tag);
+                }
                 await interaction.reply({
                     embeds: [
                         new Discord.EmbedBuilder()
                             .setTitle('Users')
                             .addFields({
                                 name: 'Allowed',
-                                value: db.prepare(`SELECT user_id FROM users WHERE is_allowed = 1`).all().map(entry => interaction.client.users.cache.get(entry.user_id).tag).join(', ') || '*None*'
+                                value: allowedList.join(', ') || '*None*'
                             }, {
                                 name: 'Blocked',
-                                value: db.prepare(`SELECT user_id FROM users WHERE is_allowed = 0`).all().map(entry => interaction.client.users.cache.get(entry.user_id).tag).join(', ') || '*None*'
+                                value: blockedList.join(', ') || '*None*'
                             })
                             .setColor('#83e6eb')
                     ],
