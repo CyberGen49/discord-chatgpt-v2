@@ -1,7 +1,6 @@
 const Discord = require('discord.js');
 const sqlite3 = require('better-sqlite3');
 const fs = require('fs');
-console.log(__dirname)
 const config = require(fs.existsSync(`${__dirname}/../dev.config.json`) ? '../dev.config.json' : '../config.json');
 module.exports = {
     // Build context entry
