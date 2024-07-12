@@ -125,7 +125,7 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             ...config.gpt.messages,
             {
                 role: 'system',
-                content: `The current date and time is ${dayjs().format()}. You are chatting with a user named ${userName}.`
+                content: `The current date and time is ${dayjs().format()}. Your name is ${bot.user.globalName || bot.user.username} and you are chatting with a user named ${userName}.`
             }
         ];
         // If the message is a reply, use the referenced message as context
