@@ -49,7 +49,7 @@ The bot can be configured by editing the `config.json` file, as you did during s
     - boolean `public_usage`: Determines whether or not anyone can use the bot. When this is `true`, everyone but people blocked with `/users block` can use the bot. When this is `false`, only people allowed with `/users allow` can use the bot.
     - string `owner_id`: The Discord user ID of the bot maintainer (you, most likely). Only this user can use admin commands like `/users`.
     - object `status`: Contains settings for the bot's activity status
-        - string `type`: Set to `Playing`, `Watching`, or `Listening`, determines the part in bold at the beginning of the status
+        - string `type`: Set to `Playing`, `Watching`, or `Listening`, determines the part in bold at the beginning of the status. Set to `Custom` to remove the prefix and use `text` to set the entire status.
         - string `text`: The text following the activity type. `{messages_month}` is replaced with the number of messages sent to the bot this month, and `{messages_total}` is replaced with the number of messages sent to the bot in total.
     - boolean `split_responses`: Determines whether or not model responses are split and sent by paragraph. When this is `false`, the model's response will be sent as a single message instead of several smaller messages. Responses will still be split if they exceed Discord's character limit.
     - number `response_part_min_delay`: The minimum number of milliseconds of delay that should exist between sending message parts. This will not impact the speed at which the response is generated, only how fast it's sent. Low numbers for this option might lead to the bot hitting rate limits, causing uneven and extended delays.
