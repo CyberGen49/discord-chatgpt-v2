@@ -191,7 +191,7 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             ...config.gpt.messages,
             {
                 role: 'system',
-                content: `The current date and time is ${dayjs().format()}. Your name is ${bot.user.globalName || bot.user.username} and you are chatting on Discord.`
+                content: `The current date and time is ${dayjs().format()}. Your name is "${getUserName(bot.user.id, msg.guild)}" and you are chatting on Discord.`
             }
         ];
         const isReply = msg.type == Discord.MessageType.Reply;
@@ -276,10 +276,10 @@ bot.on(Discord.Events.MessageCreate, async msg => {
                     tokenCount += countImageTokens(dims.width, dims.height);
                 }
             }
-            totalTokens += tokenCount;
-            const force = (isReplyAtStart && i == 0) || (inverseIndex < config.gpt.context_msg_count_min) || entry.role == 'system';
+            const force = (isReplyAtStart && i <= 1) || (inverseIndex < config.gpt.context_msg_count_min);
             if (totalTokens < config.gpt.context_tokens_max || force) {
                 pendingInputFinal.unshift(entry);
+                totalTokens += tokenCount;
             }
         }
         input.push(...pendingInputFinal);
