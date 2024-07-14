@@ -228,10 +228,9 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             const entry = data[1] || data;
             if (!isValidContextMsg(entry)) continue;
             // Add context JSON line
-            const isEntryReply = entry.reference ? true : false;
-            const replyToIndex = isEntryReply ? idsToIndexes[entry.reference?.messageId] || undefined : undefined;
+            const replyToIndex = entry.reference ? idsToIndexes[entry.reference?.messageId] || undefined : undefined;
             const isAssistant = entry.author.id == bot.user.id;
-            const meta = `[${i}] from "${getMsgAuthorName(entry)}"${replyToIndex ? `\nReplying to [${replyToIndex}] from ${getMsgAuthorName(entry.reference)}`:''}`;
+            const meta = `[${i}] from "${getMsgAuthorName(entry)}"${replyToIndex ? `\nReplying to [${replyToIndex}]}`:''}`;
             const textContent = isAssistant ? getSanitizedContent(entry) : `${meta}\n${getSanitizedContent(entry)}`;
             const inputEntry = {
                 role: isAssistant ? 'assistant' : 'user',
