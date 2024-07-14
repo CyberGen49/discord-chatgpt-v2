@@ -1,28 +1,123 @@
 const fs = require('fs');
 const Discord = require('discord.js');
-const sqlite3 = require('better-sqlite3');
 const dayjs = require('dayjs');
 const OpenAI = require('openai');
+const gptEncoder = require('gpt-3-encoder');
+const clc = require('cli-color');
 
-const config = require(fs.existsSync('./dev.config.json') ? './dev.config.json' : './config.json');
+const config = require('./config.json');
 
 const openai = new OpenAI({
     apiKey: config.credentials.openai_secret
 });
 
 const busyUsers = {};
+const channelActivity = {};
 
-/**
- * This function creates a database connection, passes it to a callback, and closes it afterwards.
- * @param {function} cb A callback to receive the database object
- * @returns Whatever the callback returns
- */
-const db = cb => {
-    const db = sqlite3('storage.db');
-    const res = cb(db);
-    db.close();
-    return res;
+// Count the number of tokens in a string
+const countStringTokens = str => {
+    return gptEncoder.encode(str).length;
+};
+
+const adjustImageDimensions = (width, height) => {
+    const maxLongSide = config.gpt.vision.resize.long_side;
+    const maxShortSide = config.gpt.vision.resize.short_side;
+    // Determine the longer and shorter dimensions
+    let longSide = Math.max(width, height);
+    let shortSide = Math.min(width, height);
+    // Check if resizing is needed
+    if (longSide <= maxLongSide && shortSide <= maxShortSide) {
+        return { width, height }; // No resize needed
+    }
+    // Calculate aspect ratio
+    const aspectRatio = longSide / shortSide;
+    // Rescale
+    if (longSide > maxLongSide) {
+        longSide = maxLongSide;
+        shortSide = longSide / aspectRatio;
+    }
+    if (shortSide > maxShortSide) {
+        shortSide = maxShortSide;
+        longSide = shortSide * aspectRatio;
+    }
+    // Return the resized dimensions, keeping width and height identifiers
+    return width > height 
+        ? { width: longSide, height: shortSide }
+        : { width: shortSide, height: longSide };
+};
+
+const countImageTokens = (width, height) => {
+    const dims = adjustImageDimensions(width, height);
+    let tokenCount = config.gpt.vision.tokens_base;
+    const widthTiles = Math.ceil(dims.width / config.gpt.vision.tile_size);
+    const heightTiles = Math.ceil(dims.height / config.gpt.vision.tile_size);
+    tokenCount += widthTiles * heightTiles * config.gpt.vision.tokens_per_tile;
+    return tokenCount;
+};
+
+// Determines if a received message is a valid AI prompt
+const isValidInputMsg = msg => {
+    // If the message isn't a normal text message, ignore it
+    if (msg.type != Discord.MessageType.Default && msg.type != Discord.MessageType.Reply) return false;
+    // If the message is from a bot, ignore it
+    if (msg.author.bot) return false;
+    // If the message doesn't mention the bot and this isn't in a DM, ignore it
+    if (msg.guild && !msg.mentions.has(bot.user.id)) return false;
+    // If the message has no content and no attachments, or no content
+    // and vision is disabled, ignore it
+    if (!msg.content && (!msg.attachments.length || !config.gpt.vision.enabled))
+        return false;
+    return true;
+};
+
+// Determines if a message is valid for context use
+const isValidContextMsg = msg => {
+    // If the message isn't a normal text message, ignore it
+    if (msg.type != Discord.MessageType.Default && msg.type != Discord.MessageType.Reply) return false;
+    // If the message has no content and no attachments, or no content
+    // and vision is disabled, ignore it
+    if (!msg.content && (!msg.attachments.length || !config.gpt.vision.enabled))
+        return false;
+    return true;
+};
+
+// Returns 1 for access granted, 0 for denied, and -1 for blocked
+const getUserAccessStatus = id => {
+    // Get access data
+    const data = require('./access.json');
+    let userStatus = data.users[id] || 0;
+    data.users[id] = userStatus;
+    if (id == config.bot.owner_id) data.users[id] = 1;
+    // Write access data
+    fs.writeFileSync('./access.json', JSON.stringify(data, null, 4));
+    // Disallow blocked users
+    if (userStatus == -1) return -1;
+    // If the bot is private, disallow all users not explicitly allowed
+    if (!data.public_usage) {
+        if (userStatus != 1) return 0;
+    }
+    return 1;
+};
+
+// Get the nickname/name/username of the author of a message
+const getMsgAuthorName = msg => {
+    return msg.member?.nickname || msg.author.globalName || msg.author.username;
 }
+
+// Get the nickname/name/username of a user
+const getUserName = (id, guild) => {
+    const member = guild?.members.cache.get(id);
+    const user = bot.users.cache.get(id);
+    return member?.nickname || user.globalName || user.username || 'Unknown User';
+}
+
+// Get message content with user mentions replaced with their names
+const getSanitizedContent = msg => {
+    if (!msg.content) return '';
+    return msg.content.replace(/<@!?(\d+)>/g, (match, id) => {
+        return getUserName(id, msg?.guild) || match;
+    });
+};
 
 const bot = new Discord.Client({
     intents: [
@@ -39,19 +134,8 @@ const bot = new Discord.Client({
 });
 
 const updateStatus = () => {
-    const startOfMonth = dayjs().startOf('month').unix()*1000;
-    const countMonth = db(db => db.prepare(`SELECT COUNT(*) FROM stats WHERE time_created > ?`).get(startOfMonth)['COUNT(*)']);
-    const countTotal = db(db => db.prepare(`SELECT COUNT(*) FROM stats`).get()['COUNT(*)']);
-    const placeholders = {
-        '{messages_month}': countMonth,
-        '{messages_total}': countTotal
-    };
-    let text = config.bot.status.text;
-    for (const placeholder in placeholders) {
-        text = text.replace(placeholder, placeholders[placeholder]);
-    }
     bot.user.setActivity({
-        name: text,
+        name: config.bot.status.text,
         type: Discord.ActivityType[config.bot.status.type]
     });
 };
@@ -59,11 +143,9 @@ const updateStatus = () => {
 bot.on(Discord.Events.ClientReady, () => {
     console.log(`Logged in as ${bot.user.tag}`);
     const inviteUrl = `https://discord.com/api/oauth2/authorize?client_id=${bot.user.id}&permissions=2048&scope=bot`;
-    console.log(`Invite URL: ${inviteUrl}`);
+    console.log(`Invite URL:`, clc.blueBright(inviteUrl));
     updateStatus();
 });
-
-const channelActivity = {};
 
 bot.on(Discord.Events.MessageCreate, async msg => {
     // Update channel activity timestamp
@@ -71,163 +153,151 @@ bot.on(Discord.Events.MessageCreate, async msg => {
     const getLastActivityTime = () => {
         return channelActivity[msg.channel.id] || 0;
     };
-    // If the message isn't a normal text message, ignore it
-    if (msg.type != Discord.MessageType.Default && msg.type != Discord.MessageType.Reply) return;
-    // If the message is from a bot, ignore it
-    if (msg.author.bot) return;
-    // If the message doesn't mention the bot and this isn't in a DM, ignore it
-    if (msg.guild && !msg.mentions.has(bot.user.id)) return;
-    // If the message is empty, ignore it
-    msg.content = msg.content.replace(`<@${bot.user.id}>`, '').trim();
-    if (!msg.content) return;
-    console.log(`Handling message from ${msg.author.tag}`);
+    if (!isValidInputMsg(msg)) return;
+    console.log(`Handling message from ${msg.author.tag}...`);
     // If the user already has an interaction in progress, stop here
     if (busyUsers[msg.author.id]) {
-        msg.react('❌').catch(() => null);
-        return; // Disabled for now, gets annoying
-        return msg.channel.send(config.messages.error_user_busy);
+        return msg.react('❌').catch(() => null);
     }
-    // Handle allowed/blocked users
-    const userEntry = db(db => db.prepare(`SELECT * FROM users WHERE user_id = ?`).get(msg.author.id));
-    if (msg.author.id != config.bot.owner_id && userEntry && !userEntry.is_allowed) {
+    // Check user access
+    const accessStatus = getUserAccessStatus(msg.author.id);
+    if (accessStatus == -1) {
         return msg.channel.send(config.messages.error_user_blocked);
     }
-    if (msg.author.id != config.bot.owner_id && !config.bot.public_usage) {
-        if (!userEntry) {
-            const owner = bot.users.cache.get(config.bot.owner_id);
-            await owner.send({
-                content: config.messages.dm_owner_new_user.replace(/\{user\}/g, msg.author.tag),
-                components: [
-                    new Discord.ActionRowBuilder().addComponents(
-                        new Discord.ButtonBuilder()
-                            .setCustomId(`allow_user.${msg.author.id}`)
-                            .setLabel(`Allow ${msg.author.tag}`)
-                            .setStyle(Discord.ButtonStyle.Success),
-                        new Discord.ButtonBuilder()
-                            .setCustomId(`block_user.${msg.author.id}`)
-                            .setLabel(`Block ${msg.author.tag}`)
-                            .setStyle(Discord.ButtonStyle.Danger),
-                    )
-                ]
-            });
-            await msg.channel.send(config.messages.error_user_unlisted);
-            return;
-        } else if (!userEntry.is_allowed) {
-            return msg.channel.send(config.messages.error_user_blocked);
-        }
+    if (accessStatus == 0) {
+        const owner = bot.users.cache.get(config.bot.owner_id);
+        await owner.send({
+            content: config.messages.dm_owner_new_user.replace(/\{user\}/g, msg.author.tag),
+            components: [
+                new Discord.ActionRowBuilder().addComponents(
+                    new Discord.ButtonBuilder()
+                        .setCustomId(`allow_user.${msg.author.id}`)
+                        .setLabel(`Allow ${msg.author.tag}`)
+                        .setStyle(Discord.ButtonStyle.Success),
+                    new Discord.ButtonBuilder()
+                        .setCustomId(`block_user.${msg.author.id}`)
+                        .setLabel(`Block ${msg.author.tag}`)
+                        .setStyle(Discord.ButtonStyle.Danger),
+                )
+            ]
+        });
+        return msg.channel.send(config.messages.error_user_unlisted);
     }
     let typingInterval;
     try {
         busyUsers[msg.author.id] = true;
         // Build messages object
-        const userName = msg.member?.nickname || msg.author.globalName || msg.author.username;
-        const messages = [
+        const input = [
             ...config.gpt.messages,
             {
                 role: 'system',
-                content: `The current date and time is ${dayjs().format()}. Your name is ${bot.user.globalName || bot.user.username} and you are chatting with a user named ${userName}.`
+                content: `The current date and time is ${dayjs().format()}. Your name is ${bot.user.globalName || bot.user.username} and you are chatting on Discord.`
             }
         ];
-        // If the message is a reply, use the referenced message as context
-        let inputPrefix = '';
-        if (msg.type == Discord.MessageType.Reply) {
-            // Attempt to find the message in the database
-            const referenceMsgEntry = db(db => db.prepare(`SELECT * FROM response_messages WHERE msg_id = ?`).get(msg.reference.messageId));
-            const partsCount = db(db => db.prepare(`SELECT COUNT(*) FROM response_messages WHERE input_msg_id = ?`).get(referenceMsgEntry?.input_msg_id)['COUNT(*)']);
-            const interaction = db(db => db.prepare(`SELECT * FROM interactions WHERE input_msg_id = ?`).get(referenceMsgEntry?.input_msg_id));
-            // If we found something, use both input and output as context
-            if (interaction) {
-                // Set input prefix if message has multiple parts
-                if (partsCount > 1) {
-                    inputPrefix = `"${referenceMsgEntry.content.length > 250 ? referenceMsgEntry.content.substring(0, 250) + '...' : referenceMsgEntry.content}"\n\n`;
-                }
-                const interactionData = JSON.parse(interaction.data);
-                const output = interactionData.pop();
-                const input = interactionData.pop();
-                if (output?.content && input?.content) {
-                    messages.push({
-                        role: 'user',
-                        content: input.content
-                    }, {
-                        role: 'assistant',
-                        content: output.content
-                    });
-                    console.log(`Loaded referenced interaction for context`);
-                }
-            // Otherwise just use the referenced message as context
-            } else {
-                const inputMsg = await msg.channel.messages.fetch(msg.reference.messageId);
-                if (inputMsg) {
-                    const content = [
-                        { type: 'text', text: inputMsg.content }
-                    ];
-                    // Add attached images if this is a vision model
-                    if (config.gpt.vision) {
-                        for (const attachment of inputMsg.attachments.values()) {
-                            if (attachment.contentType.startsWith('image/')) {
-                                content.push({ type: 'image_url', image_url: { url: attachment.url } });
-                                console.log(`Adding image attachment to context`);
-                            }
-                        }
-                    }
-                    messages.push({
-                        role: 'user', content
-                    });
-                    console.log(`Loaded referenced message content for context`);
-                }
-            }
-        } else if (!msg.guild) {
-            // Use previous DM interaction as context
-            const interaction = db(db => db.prepare(`SELECT * FROM interactions WHERE user_id = ? AND channel_id = ? ORDER BY time_created DESC LIMIT 1`).get(msg.author.id, msg.channel.id));
-            if (interaction) {
-                const interactionData = JSON.parse(interaction.data);
-                const output = interactionData.pop();
-                const input = interactionData.pop();
-                if (output?.content && input?.content) {
-                    // Remove outdated images
-                    for (let i = 0; i < input.content.length; i++) {
-                        const segment = input.content[i];
-                        if (segment.type == 'image_url') {
-                            const url = segment.image_url.url;
-                            const res = await fetch(url, {
-                                method: 'HEAD'
-                            });
-                            if (!res.ok) {
-                                console.log(`Removing expired image attachment from context`);
-                                input.content.splice(i, 1);
-                                i--;
-                            }
-                        }
-                    }
-                    // Push context
-                    messages.push({
-                        role: 'user',
-                        content: input.content
-                    }, {
-                        role: 'assistant',
-                        content: output.content
-                    });
-                }
-                console.log(`Loaded DM interaction for context`);
+        const isReply = msg.type == Discord.MessageType.Reply;
+        const replyToId = isReply ? msg.reference?.messageId : null;
+        // Get messages preceding the current one
+        // Sort newest to oldest
+        const msgs = [...(await msg.channel.messages.fetch({
+            limit: Math.min(config.gpt.context_msg_count_max, 100),
+            before: msg.id
+        })).sort((a, b) => a.id - b.id)];
+        msgs.push(msg);
+        // Add reply-to message to start of messages if it's not in there
+        let isReplyAtStart = false;
+        if (replyToId && !msgs.find(m => m.id == replyToId)) {
+            const replyToMsg = await msg.channel.messages.fetch(replyToId);
+            msgs.shift();
+            if (replyToMsg) {
+                msgs.unshift(replyToMsg);
+                isReplyAtStart = true;
             }
         }
-        // Add input
-        const inputContent = [
-            { type: 'text', text: inputPrefix + msg.content }
-        ];
-        // Add attached images if this is a vision model
-        if (config.gpt.vision) {
-            for (const attachment of msg.attachments.values()) {
-                if (attachment.contentType.startsWith('image/')) {
-                    inputContent.push({ type: 'image_url', image_url: { url: attachment.url } });
-                    console.log(`Adding image attachment to input`);
+        // Loop through and build messages array
+        const pendingInput = [];
+        const idsToIndexes = [];
+        const imageDimensions = [];
+        let i = 1;
+        for (const data of msgs) {
+            const entry = data[1] || data;
+            if (!isValidContextMsg(entry)) continue;
+            // Add context JSON line
+            const replyToIndex = entry.reference ? idsToIndexes[entry.reference?.messageId] || undefined : undefined;
+            const meta = `${i}. From "${getMsgAuthorName(entry)}"${replyToIndex ? `\n(Replying to ${replyToIndex})`:''}`;
+            const textContent = `${getSanitizedContent(entry)}`;
+            const inputEntry = {
+                role: entry.author.id == bot.user.id ? 'assistant' : 'user',
+                content: [
+                    { type: 'text', text: textContent }
+                ]
+            };
+            // Add image attachments if vision is enabled
+            if (config.gpt.vision.enabled) {
+                for (const attachment of entry.attachments.values()) {
+                    if (!attachment.contentType.startsWith('image/')) continue;
+                    if (attachment.size > 1024*1024*16) continue; // 16 MiB
+                    const dims = {
+                        width: attachment.width,
+                        height: attachment.height
+                    }
+                    const url = attachment.url;
+                    if (attachment.contentType.startsWith('image/')) {
+                        inputEntry.content.push({
+                            type: 'image_url',
+                            image_url: {
+                                url,
+                                detail: config.gpt.vision.low_resolution ? 'low' : 'auto'
+                            }
+                        });
+                        imageDimensions[attachment.url] = dims;
+                    }
                 }
             }
+            idsToIndexes[entry.id] = i;
+            pendingInput.push({ 
+                role: 'system', content: [ { type: 'text', text: meta } ]
+            });
+            pendingInput.push(inputEntry);
+            i++;
         }
-        messages.push({
-            role: 'user',
-            content: inputContent
-        });
+        // Loop through new pending input and remove messages
+        // after the token limit
+        const pendingInputFinal = [];
+        let totalTokens = 0;
+        for (let i = pendingInput.length-1; i >= 0; i--) {
+            const inverseIndex = pendingInput.length - i+1;
+            const entry = pendingInput[i];
+            let tokenCount = 0;
+            for (const contentEntry of entry.content) {
+                if (contentEntry.type == 'text') {
+                    tokenCount += countStringTokens(entry.content[0].text);
+                } else if (contentEntry.type == 'image_url') {
+                    const dims = imageDimensions[contentEntry.image_url.url];
+                    tokenCount += countImageTokens(dims.width, dims.height);
+                }
+            }
+            totalTokens += tokenCount;
+            const force = (isReplyAtStart && i == 0) || (inverseIndex < config.gpt.context_msg_count_min) || entry.role == 'system';
+            if (totalTokens < config.gpt.context_tokens_max || force) {
+                pendingInputFinal.unshift(entry);
+            }
+        }
+        input.push(...pendingInputFinal);
+        /* console.log((() => {
+            const lines = JSON.stringify(pendingInputFinal, null, 2).split('\n');
+            const newLines = [];
+            for (const line of lines) newLines.push(clc.white(line));
+            return newLines.join('\n');
+        })()); */
+        let counts = {
+            user: 0,
+            assistant: 0,
+            system: 0
+        };
+        for (const entry of input) {
+            counts[entry.role]++;
+        }
+        console.log(`Prepared ${input.length}`, clc.white(`(${counts.system} system, ${counts.assistant} assistant, ${counts.user} user - estimated ${totalTokens} tokens)`), 'input messages for new interaction');
         // Handle sending and saving messages
         let msgSendQueue = [];
         let lastMsgId = msg.id;
@@ -263,11 +333,9 @@ bot.on(Discord.Events.MessageCreate, async msg => {
                 }
                 lastMsgId = responseMsg.id;
                 if (typing) await msg.channel.sendTyping();
-                // Save message
-                db(db => db.prepare(`INSERT INTO response_messages (input_msg_id, msg_id, content) VALUES (?, ?, ?)`).run(msg.id, responseMsg.id, content));
-                console.log(`Sent and saved response chunk to database`);
+                console.log(clc.greenBright(`Sent response chunk in channel`), clc.green(msg.channel.id));
             });
-            console.log(`Response chunk queued for sending`);
+            console.log(clc.cyanBright(`Response chunk queued for sending`));
         };
         // Stream and queue sending of model response
         let response = '';
@@ -281,7 +349,7 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             const stream = await openai.chat.completions.create({
                 model: config.gpt.model,
                 max_tokens: config.gpt.max_tokens,
-                messages,
+                messages: input,
                 stream: true
             });
             let pendingResponse = '';
@@ -343,16 +411,6 @@ bot.on(Discord.Events.MessageCreate, async msg => {
                 }
             }, 100);
         });
-        // Save interaction to database
-        messages.push({
-            role: 'assistant',
-            content: response
-        });
-        db(db => db.prepare(`INSERT INTO interactions (time_created, user_id, channel_id, input_msg_id, data) VALUES (?, ?, ?, ?, ?)`).run(Date.now(), msg.author.id, msg.channel.id, msg.id, JSON.stringify(messages)));
-        console.log(`Saved interaction to database`);
-        // Save stat entry
-        db(db => db.prepare(`INSERT INTO stats (time_created, user_id, type) VALUES (?, ?, ?)`).run(Date.now(), msg.author.id, 'message'));
-        updateStatus();
     } catch (error) {
         console.error(error);
         clearInterval(typingInterval);
@@ -371,7 +429,7 @@ bot.on(Discord.Events.InteractionCreate, async interaction => {
         if (fs.existsSync(file)) {
             const cmd = require(file);
             await cmd.handler(interaction);
-            console.log(`Handled ${interaction.user.tag}'s usage of /${interaction.commandName}`);
+            console.log(clc.green(`Handled ${interaction.user.tag}'s usage of /${interaction.commandName}`));
         } else {
             interaction.reply({
                 content: `This command hasn't been implemented yet.`,
@@ -384,7 +442,7 @@ bot.on(Discord.Events.InteractionCreate, async interaction => {
         if (fs.existsSync(file)) {
             const cmd = require(file);
             await cmd.handler(interaction);
-            console.log(`Handled ${interaction.user.tag}'s usage of context item "${interaction.commandName}"`);
+            console.log(clc.green(`Handled ${interaction.user.tag}'s usage of context item "${interaction.commandName}"`));
         } else {
             interaction.reply({
                 content: `This context menu item hasn't been implemented yet.`,
@@ -397,7 +455,9 @@ bot.on(Discord.Events.InteractionCreate, async interaction => {
         const user = userId ? bot.users.cache.get(userId) : null;
         switch (action) {
             case 'allow_user': {
-                db(db => db.prepare(`INSERT OR REPLACE INTO users (user_id, is_allowed) VALUES (?, 1)`).run(userId));
+                const access = JSON.parse(fs.readFileSync('access.json', 'utf8'));
+                access.users[userId] = 1;
+                fs.writeFileSync('access.json', JSON.stringify(access, null, 4));
                 await user.send(config.messages.dm_user_allowed);
                 await interaction.update({
                     content: config.messages.users_user_allowed.replace('{user}', user.tag),
@@ -406,7 +466,9 @@ bot.on(Discord.Events.InteractionCreate, async interaction => {
                 break;
             }
             case 'block_user': {
-                db(db => db.prepare(`INSERT OR REPLACE INTO users (user_id, is_allowed) VALUES (?, 0)`).run(userId));
+                const access = JSON.parse(fs.readFileSync('access.json', 'utf8'));
+                access.users[userId] = -1;
+                fs.writeFileSync('access.json', JSON.stringify(access, null, 4));
                 await interaction.update({
                     content: config.messages.users_user_blocked.replace('{user}', user.tag),
                     components: []
@@ -416,13 +478,3 @@ bot.on(Discord.Events.InteractionCreate, async interaction => {
         }
     }
 });
-
-// Periodically delete interactions older than config.database.message_lifetime_hours
-if (config.database.message_lifetime_hours) {
-    console.log(`Interaction auto-delete is enabled for entries older than ${config.database.message_lifetime_hours}`);
-    setInterval(() => {
-        db(db => db.prepare(`DELETE FROM interactions WHERE time_created < ?`).run(Date.now()-(config.database.message_lifetime_hours*60*60*1000)));
-    }, 60*1000);
-} else {
-    console.log(`Interaction auto-delete is disabled`);
-}

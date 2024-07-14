@@ -1,7 +1,13 @@
 const Discord = require('discord.js');
 const sqlite3 = require('better-sqlite3');
 const fs = require('fs');
-const config = require(fs.existsSync(`${__dirname}/../dev.config.json`) ? '../dev.config.json' : '../config.json');
+const config = require('../config.json');
+const editAccess = (cb) => {
+    let data = JSON.parse(fs.readFileSync('access.json', 'utf8'));
+    data = cb(data);
+    fs.writeFileSync('access.json', JSON.stringify(data, null, 4));
+    return data;
+};
 module.exports = {
     // Build context entry
     builder: new Discord.SlashCommandBuilder()
@@ -45,7 +51,10 @@ module.exports = {
         const db = sqlite3('storage.db');
         switch (interaction.options.getSubcommand()) {
             case 'allow':
-                db.prepare(`INSERT OR REPLACE INTO users (user_id, is_allowed) VALUES (?, 1)`).run(user.id);
+                editAccess(data => {
+                    data.users[user.id] = 1;
+                    return data;
+                });
                 await interaction.reply({
                     content: config.messages.users_user_allowed.replace('{user}', user.tag),
                     ephemeral: true
@@ -53,7 +62,10 @@ module.exports = {
                 await user.send(config.messages.dm_user_allowed);
                 break;
             case 'block':
-                db.prepare(`INSERT OR REPLACE INTO users (user_id, is_allowed) VALUES (?, 0)`).run(user.id);
+                editAccess(data => {
+                    data.users[user.id] = -1;
+                    return data;
+                });
                 await interaction.reply({
                     content: config.messages.users_user_blocked.replace('{user}', user.tag),
                     ephemeral: true
@@ -61,33 +73,42 @@ module.exports = {
                 await user.send(config.messages.dm_user_blocked);
                 break;
             case 'unlist':
-                db.prepare(`DELETE FROM users WHERE user_id = ?`).run(user.id);
+                editAccess(data => {
+                    data.users[user.id] = 0;
+                    return data;
+                });
                 await interaction.reply({
                     content: config.messages.users_user_unlisted.replace('{user}', user.tag),
                     ephemeral: true
                 });
                 break;
             case 'list':
-                const users = db.prepare(`SELECT * FROM users`).all();
+                const users = require('../access.json').users;
                 const allowedList = [];
                 const blockedList = [];
-                for (const entry of users) {
-                    const tag = `<@${entry.user_id}>`;
-                    if (entry.is_allowed)
-                        allowedList.push(tag);
+                const unlisted = [];
+                for (const key of Object.keys(users)) {
+                    const value = users[key];
+                    if (value == 1)
+                        allowedList.push(key);
+                    else if (value == -1)
+                        blockedList.push(key);
                     else
-                        blockedList.push(tag);
+                        unlisted.push(key);
                 }
                 await interaction.reply({
                     embeds: [
                         new Discord.EmbedBuilder()
                             .setTitle('Users')
                             .addFields({
-                                name: 'Allowed',
+                                name: 'Explicitly allowed',
                                 value: allowedList.join(', ') || '*None*'
                             }, {
-                                name: 'Blocked',
+                                name: 'Explicitly blocked',
                                 value: blockedList.join(', ') || '*None*'
+                            }, {
+                                name: 'Other unlisted users',
+                                value: unlisted.join(', ') || '*None*'
                             })
                             .setColor('#83e6eb')
                     ],

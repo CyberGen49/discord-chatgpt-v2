@@ -1,1 +1,0 @@
-sqlite3 storage.db ".read schema.sql"

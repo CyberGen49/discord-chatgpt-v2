@@ -1,14 +1,20 @@
 const Discord = require('discord.js');
-const fs = require('fs');
+const config = require('../config.json');
 module.exports = {
     // Build context entry
     builder: new Discord.SlashCommandBuilder()
         .setName('info')
-        .setDescription('Learn about the bot and how to use it.'),
+        .setDescription('Get info about this bot.'),
     // Handle usage
     handler: async interaction => {
         await interaction.reply({
-            content: fs.readFileSync(`${__dirname}/info.md`, 'utf-8'),
+            content: [
+                `Hi there! I'm an AI chatbot powered by OpenAI's \`${config.gpt.model}\` language model, the same one found in ChatGPT and similar services, but my behavior/personality may have been customized. Feel free to ping me in a server or send me a DM to start chatting!`,
+                ``,
+                `When you invoke this bot with a DM or ping, it is configured to scan the previous ${config.gpt.context_msg_count_max} messages to use as context. If you reply to an existing message when invoking the bot, that message will also be scanned. This data is not stored and only persists for the duration of the interaction. To learn more about how OpenAI handles API usage data, see [this page](https://openai.com/enterprise-privacy/).`,
+                ``,
+                `Interested in how this bot ticks or wanna make it better? Check out the [CyberGen49/discord-chatgpt-v2](<https://github.com/CyberGen49/discord-chatgpt-v2>) GitHub repo!`
+            ].join('\n'),
             ephemeral: true
         });
     }
