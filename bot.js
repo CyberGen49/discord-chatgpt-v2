@@ -5,6 +5,12 @@ const OpenAI = require('openai');
 const gptEncoder = require('gpt-3-encoder');
 const clc = require('cli-color');
 
+// Copy template (*-.json) files if needed
+for (const name of [ 'config', 'access' ]) {
+    if (!fs.existsSync(`${name}.json`) && fs.existsSync(`${name}-.json`))
+        fs.copyFileSync(`${name}-.json`, `${name}.json`);
+}
+
 const config = require('./config.json');
 
 const openai = new OpenAI({
