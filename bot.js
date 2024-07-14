@@ -229,10 +229,11 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             if (!isValidContextMsg(entry)) continue;
             // Add context JSON line
             const replyToIndex = entry.reference ? idsToIndexes[entry.reference?.messageId] || undefined : undefined;
+            const isAssistant = entry.author.id == bot.user.id;
             const meta = `${i}. From "${getMsgAuthorName(entry)}"${replyToIndex ? `\n(Replying to ${replyToIndex})`:''}`;
-            const textContent = `${getSanitizedContent(entry)}`;
+            const textContent = isAssistant ? getSanitizedContent(entry) : `${meta}\n${getSanitizedContent(entry)}`;
             const inputEntry = {
-                role: entry.author.id == bot.user.id ? 'assistant' : 'user',
+                role: isAssistant ? 'assistant' : 'user',
                 content: [
                     { type: 'text', text: textContent }
                 ]
@@ -260,9 +261,11 @@ bot.on(Discord.Events.MessageCreate, async msg => {
                 }
             }
             idsToIndexes[entry.id] = i;
-            pendingInput.push({ 
-                role: 'system', content: [ { type: 'text', text: meta } ]
-            });
+            if (isAssistant) {
+                pendingInput.push({ 
+                    role: 'system', content: [ { type: 'text', text: meta } ]
+                });
+            }
             pendingInput.push(inputEntry);
             i++;
         }
