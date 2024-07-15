@@ -227,7 +227,7 @@ bot.on(Discord.Events.MessageCreate, async msg => {
         for (const data of msgs) {
             const entry = data[1] || data;
             if (!isValidContextMsg(entry)) continue;
-            // Add context JSON line
+            // Add meta line
             const replyToIndex = entry.reference ? idsToIndexes[entry.reference?.messageId] || undefined : undefined;
             const isAssistant = entry.author.id == bot.user.id;
             const meta = `[${i}] from ${getMsgAuthorName(entry)}: ${replyToIndex ? `\nReplying to [${replyToIndex}]}`:''}`;
@@ -329,6 +329,10 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             msgSendQueue.shift()();
         }, 100);
         const queueMsgSend = (content, typing) => {
+            // Remove generated meta from content if this is the first chunk
+            if (lastMsgSendTime == 0) {
+                content = content.replace(/^\[\d{1,3}\].+\n/gi, '');
+            }
             msgSendQueue.push(async() => {
                 if (!content) return;
                 // Send message
