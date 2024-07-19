@@ -44,12 +44,12 @@ The bot can be configured by editing the `config.json` file, as you did during s
     - object `vision`: Contains settings for [Vision](https://platform.openai.com/docs/guides/vision)
         - boolean `enabled`: Set to `true` to allow supported models to process images.
         - boolean `low_resolution`: Set to `true` to use [low detail mode](https://platform.openai.com/docs/guides/vision/low-or-high-fidelity-image-understanding).
-        - number `tokens_base`: The number of tokens used by every image regardless of resolution.
-        - number `tile_size`: The length of one side of a high-res image tile.
-        - number `tokens_per_tile`: The number of tokens used by each 512x tile of a high resolution image (after resizing). This doesn't apply when `low_resolution` is enabled.
+        - number `tokens_base`: The number of tokens used by every image regardless of resolution. Update this value to match your model's specifications.
+        - number `tokens_per_tile`: The number of tokens used by each `tile_size`x tile of a high resolution image (after resizing). This doesn't apply when `low_resolution` is enabled. Update this value to match your model's specifications.
         - object `resize`: Contains short and long side dimensions to calculate final high-res image dimensions. Resizing happens remotely.
             - number `short_side`: The short side length
             - number `long_side`: The long side length
+        - number `tile_size`: The length of one side of a high-res image tile.
 - object `bot`: Contains settings for the Discord bot
     - string `owner_id`: The Discord user ID of the bot maintainer (you, most likely). Only this user can use admin commands like `/users`.
     - object `status`: Contains settings for the bot's activity status

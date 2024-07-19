@@ -5,7 +5,7 @@
         "discord_application_id": ""
     },
     "gpt": {
-        "model": "gpt-3.5-turbo",
+        "model": "gpt-4o-mini",
         "context_msg_count_max": 100,
         "context_msg_count_min": 2,
         "context_tokens_max": 1000,
@@ -17,12 +17,12 @@
             "enabled": false,
             "low_resolution": false,
             "tokens_base": 85,
-            "tile_size": 512,
             "tokens_per_tile": 170,
             "resize": {
                 "short_side": 768,
                 "long_side": 2048
-            }
+            },
+            "tile_size": 512
         }
     },
     "bot": {

@@ -90,11 +90,11 @@ module.exports = {
                 for (const key of Object.keys(users)) {
                     const value = users[key];
                     if (value == 1)
-                        allowedList.push(key);
+                        allowedList.push(`<@${key}>`);
                     else if (value == -1)
-                        blockedList.push(key);
+                        blockedList.push(`<@${key}>`);
                     else
-                        unlisted.push(key);
+                        unlisted.push(`<@${key}>`);
                 }
                 await interaction.reply({
                     embeds: [
@@ -110,7 +110,6 @@ module.exports = {
                                 name: 'Other unlisted users',
                                 value: unlisted.join(', ') || '*None*'
                             })
-                            .setColor('#83e6eb')
                     ],
                     ephemeral: true
                 });
