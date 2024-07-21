@@ -40,7 +40,6 @@ module.exports = {
     // Handle usage
     handler: async interaction => {
         const owner = interaction.client.users.cache.get(config.bot.owner_id);
-        console.log(interaction.user.id, owner.id)
         if (interaction.user.id != owner.id) {
             return interaction.reply({
                 content: config.messages.error_owner_only,
@@ -56,7 +55,7 @@ module.exports = {
                     return data;
                 });
                 await interaction.reply({
-                    content: config.messages.users_user_allowed.replace('{user}', user.tag),
+                    content: config.messages.users_user_allowed.replace('{user}', `<@${user.id}>`),
                     ephemeral: true
                 });
                 await user.send(config.messages.dm_user_allowed);
@@ -67,7 +66,7 @@ module.exports = {
                     return data;
                 });
                 await interaction.reply({
-                    content: config.messages.users_user_blocked.replace('{user}', user.tag),
+                    content: config.messages.users_user_blocked.replace('{user}', `<@${user.id}>`),
                     ephemeral: true
                 });
                 await user.send(config.messages.dm_user_blocked);
@@ -78,7 +77,7 @@ module.exports = {
                     return data;
                 });
                 await interaction.reply({
-                    content: config.messages.users_user_unlisted.replace('{user}', user.tag),
+                    content: config.messages.users_user_unlisted.replace('{user}', `<@${user.id}>`),
                     ephemeral: true
                 });
                 break;
