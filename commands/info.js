@@ -13,6 +13,8 @@ module.exports = {
                 ``,
                 `When you invoke this bot with a DM or ping, it is configured to scan the previous ${config.gpt.context_msg_count_max} messages to use as context, passing text${config.gpt.vision.enabled ? ' and image':''} content to the model for processing. If you reply to an existing message when invoking the bot, that message will also be scanned. This data is not stored and only persists for the duration of the interaction. To learn more about how OpenAI handles this data, see [this page](https://openai.com/enterprise-privacy/).`,
                 ``,
+                `If you want the bot to ignore previous messages, use the \`/contextbarrier\` command.`,
+                ``,
                 `If you're interested in how this bot ticks or wanna make it better, check out the [CyberGen49/discord-chatgpt-v2](<https://github.com/CyberGen49/discord-chatgpt-v2>) GitHub repo!`
             ].join('\n'),
             ephemeral: true

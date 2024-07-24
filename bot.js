@@ -160,7 +160,7 @@ bot.on(Discord.Events.MessageCreate, async msg => {
         return channelActivity[msg.channel.id] || 0;
     };
     if (!isValidInputMsg(msg)) return;
-    console.log(`Handling message from ${msg.author.tag}...`);
+    console.log(`Handling message from ${msg.author.tag} in channel ${msg.channel.id}...`);
     // If the user already has an interaction in progress, stop here
     if (busyUsers[msg.author.id]) {
         return msg.react('❌').catch(() => null);
@@ -209,6 +209,20 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             before: msg.id
         })).sort((a, b) => a.id - b.id)];
         msgs.push(msg);
+        // Remove messages before the latest context barrier
+        let contextBarrierIndex = -1;
+        let i = 0;
+        for (const data of msgs) {
+            const msg = data[1] || data;
+            if (msg.type == Discord.MessageType.ChatInputCommand && msg.author.id == bot.user.id && msg.interaction.commandName == 'contextbarrier') {
+                contextBarrierIndex = i;
+                console.log(`Encountered context barrier at index ${contextBarrierIndex}`);
+            }
+            i++;
+        }
+        if (contextBarrierIndex > -1) {
+            msgs.splice(0, contextBarrierIndex);
+        }
         // Add reply-to message to start of messages if it's not in there
         let isReplyAtStart = false;
         if (replyToId && !msgs.find(m => m.id == replyToId)) {
@@ -220,10 +234,10 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             }
         }
         // Loop through and build messages array
-        const pendingInput = [];
+        let pendingInput = [];
         const idsToIndexes = [];
         const imageDimensions = [];
-        let i = 1;
+        i = 1;
         for (const data of msgs) {
             const entry = data[1] || data;
             if (!isValidContextMsg(entry)) continue;
@@ -270,7 +284,7 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             i++;
         }
         // Loop through new pending input and remove messages
-        // after the token limit
+        // after the token limit or context barrier
         const pendingInputFinal = [];
         let totalTokens = 0;
         for (let i = pendingInput.length-1; i >= 0; i--) {
@@ -292,12 +306,12 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             }
         }
         input.push(...pendingInputFinal);
-        /* console.log((() => {
-            const lines = JSON.stringify(pendingInputFinal, null, 2).split('\n');
+        if (false) console.log((() => {
+            const lines = JSON.stringify(input, null, 2).split('\n');
             const newLines = [];
             for (const line of lines) newLines.push(clc.white(line));
             return newLines.join('\n');
-        })()); */
+        })());
         let counts = {
             user: 0,
             assistant: 0,

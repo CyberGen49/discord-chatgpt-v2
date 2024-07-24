@@ -1,6 +1,5 @@
 const Discord = require('discord.js');
-const fs = require('fs');
-const config = require(fs.existsSync(`${__dirname}/../dev.config.json`) ? '../dev.config.json' : '../config.json');
+const config = require('../config.json');
 module.exports = {
     // Build context entry
     builder: new Discord.SlashCommandBuilder()

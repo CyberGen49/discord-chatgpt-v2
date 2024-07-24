@@ -76,3 +76,6 @@ The `/users` commands are as follows:
 - `/users block <user>`: Explicitly blocks a user.
 - `/users unlist <user>`: "Unlists" a user so their access is determined by `access.public_usage`.
 - `/users list`: Lists users sorted into allowed, blocked, and unlisted categories.
+
+### Context management
+Sometimes language models can produce unexpected or unwanted results. If this happens during a conversation, use the `/contextbarrier` command to ignore all previous messages. Replying to a message before the barrier will still include it as context, but otherwise context barriers give you a fresh start.
