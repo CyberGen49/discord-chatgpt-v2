@@ -197,7 +197,7 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             ...config.gpt.messages,
             {
                 role: 'system',
-                content: `The current date and time is ${dayjs().format()}. Your name is "${getUserName(bot.user.id, msg.guild)}" and you are chatting on Discord.`
+                content: `The current date and time is ${dayjs().format()}. Your name is "${getUserName(bot.user.id, msg.guild)}" and you are chatting on Discord. User messages include prefixes to indicate who sent them. Never prepend these to your own messages.`
             }
         ];
         const isReply = msg.type == Discord.MessageType.Reply;
