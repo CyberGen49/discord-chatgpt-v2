@@ -61,6 +61,19 @@ const countImageTokens = (width, height) => {
     return tokenCount;
 };
 
+const countTokensInContentEntry = contentEntry => {
+    if (typeof contentEntry == 'string') {
+        return countStringTokens(contentEntry);
+    }
+    if (contentEntry.type == 'text') {
+        return countStringTokens(contentEntry.text);
+    } else if (contentEntry.type == 'image_url') {
+        const dims = imageDimensions[contentEntry.image_url.url];
+        return countImageTokens(dims.width, dims.height);
+    }
+    return 0;
+}
+
 // Determines if a received message is a valid AI prompt
 const isValidInputMsg = msg => {
     // If the message isn't a normal text message, ignore it
@@ -204,10 +217,13 @@ bot.on(Discord.Events.MessageCreate, async msg => {
         const replyToId = isReply ? msg.reference?.messageId : null;
         // Get messages preceding the current one
         // Sort newest to oldest
-        const msgs = [...(await msg.channel.messages.fetch({
+        const fetchedMsgs = config.gpt.context_msg_count_max > 0
+        ? await msg.channel.messages.fetch({
             limit: Math.min(config.gpt.context_msg_count_max, 100),
             before: msg.id
-        })).sort((a, b) => a.id - b.id)];
+        })
+        : [];
+        const msgs = [...fetchedMsgs.sort((a, b) => a.id - b.id)];
         msgs.push(msg);
         // Remove messages before the latest context barrier
         let contextBarrierIndex = -1;
@@ -292,12 +308,7 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             const entry = pendingInput[i];
             let tokenCount = 0;
             for (const contentEntry of entry.content) {
-                if (contentEntry.type == 'text') {
-                    tokenCount += countStringTokens(entry.content[0].text);
-                } else if (contentEntry.type == 'image_url') {
-                    const dims = imageDimensions[contentEntry.image_url.url];
-                    tokenCount += countImageTokens(dims.width, dims.height);
-                }
+                tokenCount += countTokensInContentEntry(contentEntry);
             }
             const force = (isReplyAtStart && i <= 1) || (inverseIndex < config.gpt.context_msg_count_min);
             if (totalTokens < config.gpt.context_tokens_max || force) {
@@ -306,6 +317,13 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             }
         }
         input.push(...pendingInputFinal);
+        // Recount total tokens using complete input
+        totalTokens = 0;
+        for (const entry of input) {
+            for (const contentEntry of entry.content) {
+                totalTokens += countTokensInContentEntry(contentEntry);
+            }
+        }
         if (false) console.log((() => {
             const lines = JSON.stringify(input, null, 2).split('\n');
             const newLines = [];
