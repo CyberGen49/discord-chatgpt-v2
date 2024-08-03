@@ -2,8 +2,8 @@ const fs = require('fs');
 const Discord = require('discord.js');
 const dayjs = require('dayjs');
 const OpenAI = require('openai');
-const gptEncoder = require('gpt-3-encoder');
 const clc = require('cli-color');
+const utils = require('./utils');
 
 // Copy template (*-.json) files if needed
 for (const name of [ 'config', 'access' ]) {
@@ -13,131 +13,8 @@ for (const name of [ 'config', 'access' ]) {
 
 const config = require('./config.json');
 
-const openai = new OpenAI({
-    apiKey: config.credentials.openai_secret
-});
-
 const busyUsers = {};
 const channelActivity = {};
-
-// Count the number of tokens in a string
-const countStringTokens = str => {
-    return gptEncoder.encode(str).length;
-};
-
-const adjustImageDimensions = (width, height) => {
-    const maxLongSide = config.gpt.vision.resize.long_side;
-    const maxShortSide = config.gpt.vision.resize.short_side;
-    // Determine the longer and shorter dimensions
-    let longSide = Math.max(width, height);
-    let shortSide = Math.min(width, height);
-    // Check if resizing is needed
-    if (longSide <= maxLongSide && shortSide <= maxShortSide) {
-        return { width, height }; // No resize needed
-    }
-    // Calculate aspect ratio
-    const aspectRatio = longSide / shortSide;
-    // Rescale
-    if (longSide > maxLongSide) {
-        longSide = maxLongSide;
-        shortSide = longSide / aspectRatio;
-    }
-    if (shortSide > maxShortSide) {
-        shortSide = maxShortSide;
-        longSide = shortSide * aspectRatio;
-    }
-    // Return the resized dimensions, keeping width and height identifiers
-    return width > height 
-        ? { width: longSide, height: shortSide }
-        : { width: shortSide, height: longSide };
-};
-
-const countImageTokens = (width, height) => {
-    const dims = adjustImageDimensions(width, height);
-    let tokenCount = config.gpt.vision.tokens_base;
-    const widthTiles = Math.ceil(dims.width / config.gpt.vision.tile_size);
-    const heightTiles = Math.ceil(dims.height / config.gpt.vision.tile_size);
-    tokenCount += widthTiles * heightTiles * config.gpt.vision.tokens_per_tile;
-    return tokenCount;
-};
-
-const imageDimensions = [];
-const countTokensInContentEntry = contentEntry => {
-    if (typeof contentEntry == 'string') {
-        return countStringTokens(contentEntry);
-    }
-    if (contentEntry.type == 'text') {
-        return countStringTokens(contentEntry.text);
-    } else if (contentEntry.type == 'image_url') {
-        const dims = imageDimensions[contentEntry.image_url.url];
-        return countImageTokens(dims.width, dims.height);
-    }
-    return 0;
-}
-
-// Determines if a received message is a valid AI prompt
-const isValidInputMsg = msg => {
-    // If the message isn't a normal text message, ignore it
-    if (msg.type != Discord.MessageType.Default && msg.type != Discord.MessageType.Reply) return false;
-    // If the message is from a bot, ignore it
-    if (msg.author.bot) return false;
-    // If the message doesn't mention the bot and this isn't in a DM, ignore it
-    if (msg.guild && !msg.mentions.has(bot.user.id)) return false;
-    // If the message has no content and no attachments, or no content
-    // and vision is disabled, ignore it
-    if (!msg.content && (!msg.attachments.length || !config.gpt.vision.enabled))
-        return false;
-    return true;
-};
-
-// Determines if a message is valid for context use
-const isValidContextMsg = msg => {
-    // If the message isn't a normal text message, ignore it
-    if (msg.type != Discord.MessageType.Default && msg.type != Discord.MessageType.Reply) return false;
-    // If the message has no content and no attachments, or no content
-    // and vision is disabled, ignore it
-    if (!msg.content && (!msg.attachments.length || !config.gpt.vision.enabled))
-        return false;
-    return true;
-};
-
-// Returns 1 for access granted, 0 for denied, and -1 for blocked
-const getUserAccessStatus = id => {
-    // Get access data
-    const data = require('./access.json');
-    let userStatus = data.users[id] || 0;
-    data.users[id] = userStatus;
-    if (id == config.bot.owner_id) data.users[id] = 1;
-    // Write access data
-    fs.writeFileSync('./access.json', JSON.stringify(data, null, 4));
-    // Disallow blocked users
-    if (userStatus == -1) return -1;
-    // If the bot is private, disallow all users not explicitly allowed
-    if (!data.public_usage) {
-        if (userStatus != 1) return 0;
-    }
-    return 1;
-};
-
-// Get the nickname/name/username of the author of a message
-const getMsgAuthorName = msg => {
-    return msg.member?.nickname || msg.author.globalName || msg.author.username;
-}
-
-// Get the nickname/name/username of a user
-const getUserName = (id, guild) => {
-    const member = guild?.members.cache.get(id);
-    const user = bot.users.cache.get(id);
-    return member?.nickname || user.globalName || user.username || 'Unknown User';
-}
-
-// Get message content with user mentions replaced with their names
-const getSanitizedContent = msg => {
-    if (!msg.content) return '';
-    return msg.content.replace(/<@!?(\d+)>/g, (match, id) => {
-        return getUserName(id, msg?.guild) || match;
-    });
-};
 
 const bot = new Discord.Client({
     intents: [
@@ -173,14 +50,14 @@ bot.on(Discord.Events.MessageCreate, async msg => {
     const getLastActivityTime = () => {
         return channelActivity[msg.channel.id] || 0;
     };
-    if (!isValidInputMsg(msg)) return;
+    if (!utils.isValidInputMsg(msg)) return;
     console.log(`Handling message from ${msg.author.tag} in channel ${msg.channel.id}...`);
     // If the user already has an interaction in progress, stop here
     if (busyUsers[msg.author.id]) {
         return msg.react('❌').catch(() => null);
     }
     // Check user access
-    const accessStatus = getUserAccessStatus(msg.author.id);
+    const accessStatus = utils.getUserAccessStatus(msg.author.id);
     if (accessStatus == -1) {
         return msg.channel.send(config.messages.error_user_blocked);
     }
@@ -211,7 +88,7 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             ...config.gpt.messages,
             {
                 role: 'system',
-                content: `The current date and time is ${dayjs().format()}. Your name is "${getUserName(bot.user.id, msg.guild)}" and you are chatting on Discord. User messages include prefixes to indicate who sent them. Never prepend these to your own messages.`
+                content: `The current date and time is ${dayjs().format()}. Your name is "${utils.getUserName(bot.user.id, msg.guild)}" and you are chatting on Discord. User messages include prefixes to indicate who sent them. Never prepend these to your own messages.`
             }
         ];
         const isReply = msg.type == Discord.MessageType.Reply;
@@ -256,12 +133,12 @@ bot.on(Discord.Events.MessageCreate, async msg => {
         i = 1;
         for (const data of msgs) {
             const entry = data[1] || data;
-            if (!isValidContextMsg(entry)) continue;
+            if (!utils.isValidContextMsg(entry)) continue;
             // Add meta line
             const replyToIndex = entry.reference ? idsToIndexes[entry.reference?.messageId] || undefined : undefined;
             const isAssistant = entry.author.id == bot.user.id;
-            const meta = `[${i}] from ${getMsgAuthorName(entry)}: ${replyToIndex ? `\nReplying to [${replyToIndex}]}`:''}`;
-            const textContent = isAssistant ? getSanitizedContent(entry) : `${meta}\n${getSanitizedContent(entry)}`;
+            const meta = `[${i}] from ${utils.getMsgAuthorName(entry)}: ${replyToIndex ? `\nReplying to [${replyToIndex}]}`:''}`;
+            const textContent = isAssistant ? utils.getSanitizedContent(entry) : `${meta}\n${utils.getSanitizedContent(entry)}`;
             const inputEntry = {
                 role: isAssistant ? 'assistant' : 'user',
                 content: [
@@ -286,7 +163,7 @@ bot.on(Discord.Events.MessageCreate, async msg => {
                                 detail: config.gpt.vision.low_resolution ? 'low' : 'auto'
                             }
                         });
-                        imageDimensions[attachment.url] = dims;
+                        utils.imageDimensions[attachment.url] = dims;
                     }
                 }
             }
@@ -308,7 +185,7 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             const entry = pendingInput[i];
             let tokenCount = 0;
             for (const contentEntry of entry.content) {
-                tokenCount += countTokensInContentEntry(contentEntry);
+                tokenCount += utils.countTokensInContentEntry(contentEntry);
             }
             const force = (isReplyAtStart && i <= 1) || (inverseIndex < config.gpt.context_msg_count_min);
             if (totalTokens < config.gpt.context_tokens_max || force) {
@@ -321,7 +198,7 @@ bot.on(Discord.Events.MessageCreate, async msg => {
         totalTokens = 0;
         for (const entry of input) {
             for (const contentEntry of entry.content) {
-                totalTokens += countTokensInContentEntry(contentEntry);
+                totalTokens += utils.countTokensInContentEntry(contentEntry);
             }
         }
         if (false) console.log((() => {
@@ -390,57 +267,53 @@ bot.on(Discord.Events.MessageCreate, async msg => {
             typingInterval = setInterval(() => {
                 msg.channel.sendTyping();
             }, 5000);
-            // Get response stream
-            const stream = await openai.chat.completions.create({
-                model: config.gpt.model,
-                max_tokens: config.gpt.max_tokens,
-                messages: input,
-                stream: true
-            });
+            // Stream response
             let pendingResponse = '';
-            // Handle response chunks as they come in
-            for await (const chunkData of stream) {
-                const chunk = chunkData.choices[0].delta.content || '';
-                response += chunk;
-                pendingResponse += chunk;
-                // Queue if response is too long
-                if (pendingResponse.length > 1900) {
-                    const response = pendingResponse.slice(0, 1900).trim();
-                    pendingResponse = pendingResponse.slice(1900);
-                    queueMsgSend(response, true);
-                    continue;
-                }
-                // Don't do any splitting if disabled
-                if (!config.bot.split_responses) continue;
-                // Queue code block responses
-                const singleNewlineSplit = pendingResponse.split('\n');
-                let tripleBacktickCount = 0;
-                const codeBlockLines = [];
-                let shouldContinue = false;
-                while (singleNewlineSplit.length) {
-                    const line = singleNewlineSplit.shift();
-                    codeBlockLines.push(line);
-                    if (line.includes('```')) {
-                        tripleBacktickCount++;
-                        if (tripleBacktickCount % 2 == 0) {
-                            const response = codeBlockLines.join('\n');
-                            pendingResponse = singleNewlineSplit.join('\n');
-                            queueMsgSend(response, true);
+            response = await utils.streamChatCompletion({
+                messages: input,
+                // Handle response chunks as they come in
+                onChunk: chunk => {
+                    response += chunk;
+                    pendingResponse += chunk;
+                    // Queue if response is too long
+                    if (pendingResponse.length > 1900) {
+                        const response = pendingResponse.slice(0, 1900).trim();
+                        pendingResponse = pendingResponse.slice(1900);
+                        queueMsgSend(response, true);
+                        return;
+                    }
+                    // Don't do any splitting if disabled
+                    if (!config.bot.split_responses) return;
+                    // Queue code block responses
+                    const singleNewlineSplit = pendingResponse.split('\n');
+                    let tripleBacktickCount = 0;
+                    const codeBlockLines = [];
+                    let shouldReturn = false;
+                    while (singleNewlineSplit.length) {
+                        const line = singleNewlineSplit.shift();
+                        codeBlockLines.push(line);
+                        if (line.includes('```')) {
+                            tripleBacktickCount++;
+                            if (tripleBacktickCount % 2 == 0) {
+                                const response = codeBlockLines.join('\n');
+                                pendingResponse = singleNewlineSplit.join('\n');
+                                queueMsgSend(response, true);
+                            }
+                            shouldReturn = true;
                         }
-                        shouldContinue = true;
+                    }
+                    if (shouldReturn) return;
+                    // Queue paragraph responses
+                    const doubleNewlineSplit = pendingResponse.split('\n\n');
+                    if (doubleNewlineSplit.length > 1) {
+                        const response = doubleNewlineSplit.shift().trim();
+                        pendingResponse = doubleNewlineSplit.filter(Boolean).join('\n\n');
+                        queueMsgSend(response, true);
+                        return;
                     }
                 }
-                if (shouldContinue) continue;
-                // Queue paragraph responses
-                const doubleNewlineSplit = pendingResponse.split('\n\n');
-                if (doubleNewlineSplit.length > 1) {
-                    const response = doubleNewlineSplit.shift().trim();
-                    pendingResponse = doubleNewlineSplit.filter(Boolean).join('\n\n');
-                    queueMsgSend(response, true);
-                    continue;
-                }
-            }
-            // Stop typing indicator
+            });
+            // Stop typing indicator interval
             clearInterval(typingInterval);
             // Queue leftover response
             if (pendingResponse) queueMsgSend(pendingResponse.trim());
@@ -523,3 +396,5 @@ bot.on(Discord.Events.InteractionCreate, async interaction => {
         }
     }
 });
+
+module.exports = bot;

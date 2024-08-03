@@ -1,5 +1,4 @@
 const Discord = require('discord.js');
-const sqlite3 = require('better-sqlite3');
 const fs = require('fs');
 const config = require('../config.json');
 const editAccess = (cb) => {
@@ -47,7 +46,6 @@ module.exports = {
             });
         }
         const user = interaction.options.getUser('user');
-        const db = sqlite3('storage.db');
         switch (interaction.options.getSubcommand()) {
             case 'allow':
                 editAccess(data => {
@@ -109,11 +107,11 @@ module.exports = {
                                 name: 'Other unlisted users',
                                 value: unlisted.join(', ') || '*None*'
                             })
+                            .setColor(config.bot.embed_color)
                     ],
                     ephemeral: true
                 });
                 break;
         }
-        db.close();
     }
 }

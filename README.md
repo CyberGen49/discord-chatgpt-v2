@@ -57,6 +57,7 @@ The bot can be configured by editing the `config.json` file, as you did during s
         - string `text`: The text following the activity type. `{messages_month}` is replaced with the number of messages sent to the bot this month, and `{messages_total}` is replaced with the number of messages sent to the bot in total.
     - boolean `split_responses`: Determines whether or not model responses are split and sent by paragraph. When this is `false`, the model's response will be sent as a single message instead of several smaller messages. Responses will still be split if they exceed Discord's character limit.
     - number `response_part_min_delay`: The minimum number of milliseconds of delay that should exist between sending message parts. This will not impact the speed at which the response is generated, only how fast it's sent. Low numbers for this option might lead to the bot hitting rate limits, causing uneven and extended delays.
+    - string `embed_color`: The accent color to use on slash command embeds. Should be in hexadecimal format, including the leading `#`, or a decimal number.
 - object `messages`: Contains settings for every user-facing message sent by the bot. These aren't be listed here. Use each key's name and existing value to determine its purpose.
 
 ### User access control

@@ -32,7 +32,8 @@
             "text": "Ping or DM me to chat!"
         },
         "split_responses": true,
-        "response_part_min_delay": 1000
+        "response_part_min_delay": 1000,
+        "embed_color": "#5bcefa"
     },
     "messages": {
         "error_fatal": "A fatal error occurred:\n```{error}```See the console for more.",
