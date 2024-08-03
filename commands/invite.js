@@ -7,8 +7,9 @@ module.exports = {
         .setDescription('Get an invite link for the bot.'),
     // Handle usage
     handler: async interaction => {
+        const url = `https://discord.com/api/oauth2/authorize?client_id=${config.credentials.discord_application_id}&permissions=2048&scope=bot`;
         await interaction.reply({
-            content: `Invite me to your server:\nhttps://discord.com/api/oauth2/authorize?client_id=${config.credentials.discord_application_id}&permissions=2048&scope=bot`,
+            content: config.messages.invite.replace('{url}', url),
             ephemeral: true
         });
     }
