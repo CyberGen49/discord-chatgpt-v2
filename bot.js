@@ -61,6 +61,7 @@ const countImageTokens = (width, height) => {
     return tokenCount;
 };
 
+const imageDimensions = [];
 const countTokensInContentEntry = contentEntry => {
     if (typeof contentEntry == 'string') {
         return countStringTokens(contentEntry);
@@ -252,7 +253,6 @@ bot.on(Discord.Events.MessageCreate, async msg => {
         // Loop through and build messages array
         let pendingInput = [];
         const idsToIndexes = [];
-        const imageDimensions = [];
         i = 1;
         for (const data of msgs) {
             const entry = data[1] || data;
