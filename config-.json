@@ -23,7 +23,8 @@
                 "long_side": 2048
             },
             "tile_size": 512
-        }
+        },
+        "ignore_bots": false
     },
     "bot": {
         "owner_id": "",

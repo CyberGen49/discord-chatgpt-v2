@@ -83,6 +83,10 @@ const isValidContextMsg = msg => {
     // and vision is disabled, ignore it
     if (!msg.content && (!msg.attachments.length || !config.gpt.vision.enabled))
         return false;
+    // If bots are configured to be ignored and it's a bot
+    // that isn't outs, ignore it
+    if (config.gpt.ignore_bots && msg.author.bot && msg.author.id != msg.client.user.id)
+        return false;
     return true;
 };
 
