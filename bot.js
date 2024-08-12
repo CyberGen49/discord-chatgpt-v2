@@ -42,6 +42,7 @@ bot.on(Discord.Events.ClientReady, () => {
     const inviteUrl = `https://discord.com/api/oauth2/authorize?client_id=${bot.user.id}&permissions=2048&scope=bot`;
     console.log(`Invite URL:`, clc.blueBright(inviteUrl));
     updateStatus();
+    setInterval(updateStatus, 60*1000);
 });
 
 bot.on(Discord.Events.MessageCreate, async msg => {
