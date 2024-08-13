@@ -3,12 +3,12 @@ const dayjs = require('dayjs');
 const clc = require('cli-color');
 const utils = require('./utils');
 const config = require('./config.json');
-const bot = require('./bot');
 
 const busyUsers = {};
 const channelActivity = {};
 
 module.exports = async msg => {
+    const bot = msg.client;
     // Update channel activity timestamp
     channelActivity[msg.channel.id] = msg.createdAt.getTime();
     const getLastActivityTime = () => {
