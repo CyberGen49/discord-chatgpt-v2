@@ -52,7 +52,7 @@ module.exports = async msg => {
             ...config.gpt.messages,
             {
                 role: 'system',
-                content: `The current date and time is ${dayjs().format()}. Your name is "${utils.getUserName(bot.user.id, msg.guild)}" and you are chatting on Discord. User messages include prefixes to indicate who sent them. Never prepend these to your own messages.`
+                content: `The current date and time is ${dayjs().format()}. Your name is "${utils.getUserName(bot.user.id, msg.guild)}" and you are chatting as a Discord bot running OpenAI's ${config.gpt.model} LLM. User messages include prefixes to indicate who sent them. Never, under any circumstances, should you prepend these to your own messages.`
             }
         ];
         const isReply = msg.type == Discord.MessageType.Reply;
