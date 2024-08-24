@@ -149,7 +149,8 @@ const streamChatCompletionOpts = {
     } ],
     onChunk: (chunk = '') => {},
     onFinish: (response = '') => { return response },
-    onError: (error) => { throw new Error(error) }
+    onError: (error) => { throw new Error(error) },
+    model: config.gpt.model
 };
 const streamChatCompletion = async(opts = streamChatCompletionOpts) => {
     // Merge opts
@@ -161,7 +162,7 @@ const streamChatCompletion = async(opts = streamChatCompletionOpts) => {
         });
         // Get response stream
         const stream = await openai.chat.completions.create({
-            model: config.gpt.model,
+            model: opts.model,
             messages: opts.messages,
             stream: true
         });
