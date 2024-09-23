@@ -270,7 +270,9 @@ module.exports = async msg => {
                     // Queue paragraph responses
                     const doubleNewlineSplit = pendingResponse.split('\n\n');
                     if (doubleNewlineSplit.length > 1) {
-                        const response = doubleNewlineSplit.shift().trim();
+                        // Sanitize response
+                        let response = doubleNewlineSplit.shift().trim();
+                        response = utils.replaceConfigPlaceholders(response);
                         pendingResponse = doubleNewlineSplit.filter(Boolean).join('\n\n');
                         queueMsgSend(response, true);
                         return;
@@ -280,7 +282,7 @@ module.exports = async msg => {
             // Stop typing indicator interval
             clearInterval(typingInterval);
             // Queue leftover response
-            if (pendingResponse) queueMsgSend(pendingResponse.trim());
+            if (pendingResponse.trim()) queueMsgSend(utils.replaceConfigPlaceholders(pendingResponse.trim()));
         };
         await generate();
         isGenerationFinished = true;

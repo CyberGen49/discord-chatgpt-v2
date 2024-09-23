@@ -59,6 +59,14 @@ const countTokensInContentEntry = contentEntry => {
     return 0;
 }
 
+const replaceConfigPlaceholders = (text) => {
+    for (const placeholder in config.gpt.replacements) {
+        const replacement = config.gpt.replacements[placeholder];
+        text = text.replace(new RegExp(placeholder.replace('\\', '\\\\'), 'g'), replacement);
+    }
+    return text;
+}
+
 // Determines if a received message is a valid AI prompt
 const isValidInputMsg = msg => {
     const bot = require('./bot');
@@ -68,10 +76,14 @@ const isValidInputMsg = msg => {
     if (msg.author.bot) return false;
     // If the message doesn't mention the bot and this isn't in a DM, ignore it
     if (msg.guild && !msg.mentions.has(bot.user.id)) return false;
-    // If the message has no content and no attachments, or no content
-    // and vision is disabled, ignore it
-    if (!msg.content && (!msg.attachments.length || !config.gpt.vision.enabled))
-        return false;
+    // If vision is enabled
+    if (config.gpt.vision.enabled) {
+        // If the message has no content and no attachments, ignore it
+        if (!msg.attachments.size && !msg.content) return false;
+    } else {
+        // If the message has no content, ignore it
+        if (!msg.content) return false;
+    }
     return true;
 };
 
@@ -79,10 +91,14 @@ const isValidInputMsg = msg => {
 const isValidContextMsg = msg => {
     // If the message isn't a normal text message, ignore it
     if (msg.type != Discord.MessageType.Default && msg.type != Discord.MessageType.Reply) return false;
-    // If the message has no content and no attachments, or no content
-    // and vision is disabled, ignore it
-    if (!msg.content && (!msg.attachments.length || !config.gpt.vision.enabled))
-        return false;
+    // If vision is enabled
+    if (config.gpt.vision.enabled) {
+        // If the message has no content and no attachments, ignore it
+        if (!msg.attachments.size && !msg.content) return false;
+    } else {
+        // If the message has no content, ignore it
+        if (!msg.content) return false;
+    }
     // If bots are configured to be ignored and it's a bot
     // that isn't outs, ignore it
     if (config.gpt.ignore_bots && msg.author.bot && msg.author.id != msg.client.user.id)
@@ -187,6 +203,7 @@ module.exports = {
     imageDimensions,
     countImageTokens,
     countTokensInContentEntry,
+    replaceConfigPlaceholders,
     isValidInputMsg,
     isValidContextMsg,
     getUserAccessStatus,
