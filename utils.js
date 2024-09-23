@@ -134,14 +134,14 @@ const getUserName = (id, guild = null) => {
     const bot = require('./bot');
     const member = guild?.members.cache.get(id);
     const user = bot.users.cache.get(id);
-    return member?.nickname || user.globalName || user.username || 'Unknown User';
+    return member?.nickname || user?.globalName || user?.username || id;
 }
 
 // Get message content with user mentions replaced with their names
 const getSanitizedContent = msg => {
     if (!msg.content) return '';
     return msg.content.replace(/<@!?(\d+)>/g, (match, id) => {
-        return getUserName(id, msg?.guild) || match;
+        return getUserName(id, msg.guild) || match;
     });
 };
 
