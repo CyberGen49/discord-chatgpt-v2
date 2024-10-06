@@ -1,6 +1,7 @@
 const Discord = require('discord.js');
 const dayjs = require('dayjs');
 const clc = require('cli-color');
+const fs = require('fs');
 const utils = require('./utils');
 const config = require('./config.json');
 
@@ -10,7 +11,8 @@ const channelActivity = {};
 module.exports = async msg => {
     const bot = msg.client;
     // Update channel activity timestamp
-    channelActivity[msg.channel.id] = msg.createdAt.getTime();
+    if (msg.author.id != bot.user.id)
+        channelActivity[msg.channel.id] = msg.createdAt.getTime();
     const getLastActivityTime = () => {
         return channelActivity[msg.channel.id] || 0;
     };
@@ -186,21 +188,11 @@ module.exports = async msg => {
         let lastMsgSendTime = 0;
         let isGenerationFinished = false;
         let isSendingFinished = false;
+        let sentMsgIds = [];
         let msgSendInterval = setInterval(() => {
-            if (isGenerationFinished && msgSendQueue.length == 0) {
-                clearInterval(msgSendInterval);
-                isSendingFinished = true;
-                return;
-            }
-            if (msgSendQueue.length == 0) {
-                return;
-            }
-            if ((Date.now()-lastMsgSendTime) < config.bot.response_part_min_delay) {
-                return;
-            }
-            lastMsgSendTime = Date.now();
+            if (msgSendQueue.length == 0) return;
             msgSendQueue.shift()();
-        }, 100);
+        }, config.bot.response_part_min_delay);
         const queueMsgSend = (content, typing) => {
             // Remove generated meta from content if this is the first chunk
             if (lastMsgSendTime == 0) {
@@ -217,9 +209,18 @@ module.exports = async msg => {
                 } else {
                     responseMsg = await msg.channel.send(args);
                 }
+                lastMsgSendTime = Date.now();
+                sentMsgIds.push(responseMsg.id);
                 lastMsgId = responseMsg.id;
-                if (typing) await msg.channel.sendTyping();
                 console.log(clc.greenBright(`Sent response chunk in channel`), clc.green(msg.channel.id));
+                // Check if we're done
+                if (isGenerationFinished && msgSendQueue.length == 0) {
+                    clearInterval(msgSendInterval);
+                    isSendingFinished = true;
+                    return;
+                }
+                // If we aren't, keep typing
+                if (typing) await msg.channel.sendTyping();
             });
             console.log(clc.cyanBright(`Response chunk queued for sending`));
         };
@@ -295,6 +296,23 @@ module.exports = async msg => {
                 }
             }, 100);
         });
+        // Save interaction to file
+        const interaction = [
+            ...input, {
+                role: 'assistant',
+                content: [
+                    { type: 'text', text: response }
+                ]
+            }
+        ];
+        const filePath = `./interactions/${msg.id}.json`;
+        fs.writeFileSync(filePath, JSON.stringify(interaction));
+        const interactions = JSON.parse(fs.readFileSync('./interactions.json'));
+        for (const msgId of [ msg.id, ...sentMsgIds ]) {
+            interactions.msg_to_file[msgId] = filePath;
+        }
+        fs.writeFileSync('./interactions.json', JSON.stringify(interactions, null, 4));
+        console.log(clc.greenBright(`Saved interaction to file`), clc.green(filePath));
     } catch (error) {
         console.error(error);
         clearInterval(typingInterval);

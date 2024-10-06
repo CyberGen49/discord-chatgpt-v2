@@ -3,10 +3,11 @@ const Discord = require('discord.js');
 const clc = require('cli-color');
 
 // Copy template (*-.json) files if needed
-for (const name of [ 'config', 'access' ]) {
+for (const name of [ 'config', 'access', 'interactions' ]) {
     if (!fs.existsSync(`${name}.json`) && fs.existsSync(`${name}-.json`))
         fs.copyFileSync(`${name}-.json`, `${name}.json`);
 }
+if (!fs.existsSync('./interactions')) fs.mkdirSync('./interactions');
 
 const config = require('./config.json');
 
@@ -44,5 +45,32 @@ bot.on(Discord.Events.MessageCreate, require('./messageHandler'));
 bot.on(Discord.Events.InteractionCreate, require('./interactionHandler'));
 
 bot.login(config.credentials.discord_bot_token);
+
+// Periodically purge old interactions
+setInterval(() => {
+    const interactions = JSON.parse(fs.readFileSync('./interactions.json', 'utf8'));
+    const now = Date.now();
+    for (const id in interactions.msg_to_file) {
+        const filePath = interactions.msg_to_file[id];
+        let deleted = false;
+        if (!fs.existsSync(filePath)) {
+            delete interactions.msg_to_file[id];
+            deleted = true;
+        } else {
+            const stats = fs.statSync(filePath);
+            const age = now - stats.mtimeMs;
+            const maxAge = config.bot.interaction_max_age_hours * 60 * 60 * 1000;
+            if (age > maxAge) {
+                fs.unlinkSync(filePath);
+                delete interactions.msg_to_file[id];
+                deleted = true;
+            }
+        }
+        if (deleted) {
+            console.log(`Purged interaction associated with message ${id}`);
+        }
+    }
+    fs.writeFileSync('./interactions.json', JSON.stringify(interactions, null, 2));
+}, 60*1000);
 
 module.exports = bot;

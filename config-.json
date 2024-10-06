@@ -104,7 +104,8 @@
         },
         "split_responses": true,
         "response_part_min_delay": 1000,
-        "embed_color": "#5bcefa"
+        "embed_color": "#5bcefa",
+        "interaction_max_age_hours": 24
     },
     "messages": {
         "error_fatal": "A fatal error occurred:\n```{error}```See the console for more.",

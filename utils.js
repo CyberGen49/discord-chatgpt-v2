@@ -103,6 +103,10 @@ const isValidContextMsg = msg => {
     // that isn't outs, ignore it
     if (config.gpt.ignore_bots && msg.author.bot && msg.author.id != msg.client.user.id)
         return false;
+    // If this message is from the bot and it's an interaction,
+    // but not contextbarrier, ignore it
+    if (msg.author.id == msg.client.user.id && msg.interaction && msg.interaction.commandName != 'contextbarrier')
+        return false;
     return true;
 };
 
