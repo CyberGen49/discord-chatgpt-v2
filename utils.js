@@ -4,6 +4,8 @@ const gptEncoder = require('gpt-3-encoder');
 const OpenAI = require('openai');
 const config = require('./config.json');
 
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 // Count the number of tokens in a string
 const countStringTokens = str => {
     return gptEncoder.encode(str).length;
@@ -177,21 +179,79 @@ const streamChatCompletion = async(opts = streamChatCompletionOpts) => {
     opts = Object.assign({}, streamChatCompletionOpts, opts);
     try {
         // Initialize OpenAI
-        const openai = new OpenAI({
-            apiKey: config.credentials.openai_secret
-        });
+        let initOpts;
+        switch (config.gpt.provider) {
+            case 'openai': {
+                initOpts = {
+                    apiKey: config.credentials.openai_secret
+                };
+                break;
+            }
+            case 'deepseek': {
+                initOpts = {
+                    baseURL: 'https://api.deepseek.com',
+                    apiKey: config.credentials.deepseek_secret
+                };
+                const messages = [];
+                for (const message of opts.messages) {
+                    const role = message.role;
+                    // Ensure message content is always a string
+                    let content = '';
+                    if (typeof message.content == 'string') {
+                        content = message.content;
+                    } else {
+                        for (const contentEntry of message.content) {
+                            if (contentEntry.type == 'text') {
+                                content += contentEntry.text + '\n';
+                            } else if (contentEntry.type == 'image_url') {
+                                content += contentEntry.image_url.url + '\n';
+                            }
+                        }
+                    }
+                    content = content.trim();
+                    // Ensure roles aren't repeated successively
+                    if (messages[messages.length - 1]?.role == role) {
+                        messages[messages.length - 1].content += '\n' + content;
+                    // Ensure system messages don't appear after non-system messages
+                    } else if (messages[messages.length - 1]?.role != 'system' && role == 'system') {
+                        continue;
+                    } else {
+                        messages.push({ role, content });
+                    }
+                }
+                opts.messages = messages;
+                break;
+            }
+            default: {
+                throw new Error(`"${config.gpt.provider}" isn't a valid provider. Please update your configuration.`);
+            }
+        }
+        const openai = new OpenAI(initOpts);
         // Get response stream
-        const stream = await openai.chat.completions.create({
+        const res = await openai.chat.completions.create({
             model: opts.model,
             messages: opts.messages,
-            stream: true
+            temperature: config.gpt.temperature,
+            stream: config.gpt.should_stream
         });
         let response = '';
-        // Handle response chunks as they come in
-        for await (const chunkData of stream) {
-            const chunk = chunkData.choices[0].delta.content || '';
-            response += chunk;
-            opts.onChunk(chunk);
+        if (config.gpt.should_stream) {
+            // Handle response chunks as they come in
+            for await (const chunkData of res) {
+                const chunk = chunkData.choices[0].delta.content || '';
+                response += chunk;
+                opts.onChunk(chunk);
+            }
+        } else {
+            // Handle response
+            response = res.choices[0].message.content;
+            const split = response.split(' ');
+            const last = split.pop();
+            for (const token of split) {
+                opts.onChunk(token + ' ');
+                await sleep(10);
+            }
+            opts.onChunk(last);
         }
         // Handle completion
         return opts.onFinish(response);

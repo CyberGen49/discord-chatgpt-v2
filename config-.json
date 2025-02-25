@@ -1,18 +1,22 @@
 {
     "credentials": {
         "openai_secret": "",
+        "deepseek_secret": "",
         "discord_bot_token": "",
         "discord_application_id": ""
     },
     "gpt": {
+        "provider": "openai",
         "model": "gpt-4o-mini",
-        "context_msg_count_max": 100,
-        "context_msg_count_min": 2,
-        "context_tokens_max": 1000,
+        "temperature": 1,
+        "should_stream": true,
         "messages": [{
             "role": "system",
             "content": "You are a friendly and helpful Discord bot. Make your responses short and concise. Multiple paragraphs will be treated as distinct messages."
         }],
+        "context_msg_count_max": 100,
+        "context_msg_count_min": 2,
+        "context_tokens_max": 1000,
         "vision": {
             "enabled": false,
             "low_resolution": false,
