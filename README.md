@@ -1,5 +1,5 @@
 # discord-chatgpt-v2
-A Discord bot allowing users to interact with OpenAI's large-language models.
+A Discord bot allowing users to interact with OpenAI or Deepseek's large-language models.
 
 ![Sample](/sample.png)
 
@@ -11,36 +11,42 @@ This is a complete rewrite of my original [discord-chatgpt](https://github.com/C
 1. Run `npm install`
 1. Rename `config-.json` to `config.json`
     * This prevents your config from being overwritten should you update your bot.
-1. [Generate an OpenAI API key](https://platform.openai.com/account/api-keys) and paste it in the `credentials.openai_secret` config field
-    * **Note:** Using OpenAI's APIs isn't free. See their [pricing](https://openai.com/pricing) for more info.
-1. [Create a new Discord application](https://discord.com/developers/applications)
+2. Get an API key for your chosen platform - [OpenAI](https://platform.openai.com/account/api-keys) or [Deepseek](https://platform.deepseek.com/api_keys) - and paste it in the `credentials.openai_secret` or `credentials.deepseek_secret` config fields, respectively
+    * **Important:** If you choose to use Deepseek, change the `gpt.provider` config field to `deepseek`.
+    * **Note:** Using these APIs isn't free. See their respective pricing resources for details.
+3. [Create a new Discord application](https://discord.com/developers/applications)
     1. Set its name, description (about me), and picture as you see fit
-    1. Copy the Application ID and paste it in the `credentials.discord_application_id` config field
-    1. Go to the "Bot" tab and create a new bot if it's not created already
-    1. Copy the bot token and paste it in the `credentials.discord_bot_token` config field
-    1. Scroll down and make sure "Message content intent" is enabled
-1. Set your Discord user ID in the `bot.owner_id` config field. Get this by turning on developer mode in settings and right-clicking on your profile.
-1. Make any other changes to the config file, then save it.
-1. Register the bot's slash and context menu commands by running `node registerCommands.js`
-1. Start the bot with `node bot.js`
+    2. Copy the Application ID and paste it in the `credentials.discord_application_id` config field
+    3. Go to the "Bot" tab and create a new bot if it's not created already
+    4. Copy the bot token and paste it in the `credentials.discord_bot_token` config field
+    5. Scroll down and make sure "Message content intent" is enabled
+4. Set your Discord user ID in the `bot.owner_id` config field. Get this by turning on developer mode in settings and right-clicking on your profile.
+5. Make any other changes to the config file, then save it.
+6. Register the bot's slash and context menu commands by running `node registerCommands.js`
+7. Start the bot with `node bot.js`
     * Pro tip: Install [PM2](https://pm2.keymetrics.io/docs/usage/quick-start/) and run the bot with `pm2 start`.
-1. Once the bot logs in, an invite URL will be logged. Open it and follow the instructions to add the bot to your server.
-1. Try it out by DMing or pinging the bot!
+8. Once the bot logs in, an invite URL will be logged. Open it and follow the instructions to add the bot to your server.
+9. Try it out by DMing or pinging the bot!
 
 ### Configuration
 The bot can be configured by editing the `config.json` file, as you did during setup. All config options are as follows:
 
 - object `credentials`: Contains authentication settings
     - string `openai_secret`: Your OpenAI API key
+    - string `deepseek_secret`: Your Deepseek API key
     - string `discord_bot_token`: Your Discord bot's token
     - string `discord_application_id`: Your Discord application/client ID
 - object `gpt`: Contains language model settings
-    - string `model`: One of OpenAI's [models](https://platform.openai.com/docs/models/overview) (specifically the newer GPT models)
-    - number `context_msg_count_max`: The maximum number of messages above the prompt message to use as context.
-    - number `context_msg_count_min`: The minimum number of messages above the prompt message to use as context, regardless of token usage.
+    - string `provider`: Either `openai` or `deepseek`
+    - string `model`: A model from your provider. See [OpenAI models](https://platform.openai.com/docs/models/overview) (specifically the newer GPT models) or [Deepseek models](https://api-docs.deepseek.com/quick_start/pricing)
+    - number `temperature`: The model's [temperature](https://platform.openai.com/docs/api-reference/audio/createTranscription#audio-createtranscription-temperature) value, ranging from `0` to `2`.
+    - boolean `should_stream`: Whether or not the response should be streamed. If true, responses will be faster as they will be processed and sent by the bot while still being generated. This may not be supported with all models.
     - array `messages[]`: A list of messages to be inserted at the beginning of every API request. Note that a `system` message containing the date and time, bot name, and other basic instructions is added automatically, placed after this set of messages.
         - string `role`: Set to `system`, `assistant`, or `user`. `system` messages can be used to influence the model's behavior and give it information, `assistant` messages are those sent by the model, and `user` messages are those sent by the user.
         - string `content`: The message's text content
+    - number `context_msg_count_max`: The maximum number of messages above the prompt message to use as context.
+    - number `context_msg_count_min`: The minimum number of messages above the prompt message to use as context, regardless of token usage.
+    - number `context_tokens_max`: The minimum number of input tokens that context should use.
     - object `vision`: Contains settings for [Vision](https://platform.openai.com/docs/guides/vision)
         - boolean `enabled`: Set to `true` to allow supported models to process images.
         - boolean `low_resolution`: Set to `true` to use [low detail mode](https://platform.openai.com/docs/guides/vision/low-or-high-fidelity-image-understanding).
