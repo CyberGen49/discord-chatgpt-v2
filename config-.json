@@ -17,7 +17,18 @@
         }],
         "context_msg_count_max": 100,
         "context_msg_count_min": 2,
-        "context_tokens_max": 1000,
+        "context_tokens_max": 100000,
+        "text_files": {
+            "enabled": true,
+            "extensions": [
+                "txt", "md", "json", "xml", "html", "css", "js", "jsx", "ts",
+                "tsx", "java", "py", "rb", "php", "c", "cpp", "h", "hpp", "cs",
+                "go", "rs", "swift", "kt", "m", "sh", "bat", "pl", "pm", "r",
+                "sql", "ini", "cfg", "conf", "yaml", "yml", "toml", "dockerfile",
+                "makefile", "gradle", "properties"
+            ],
+            "max_bytes": 20000
+        },
         "vision": {
             "enabled": false,
             "low_resolution": false,

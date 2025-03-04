@@ -51,12 +51,16 @@ The bot can be configured by editing the `config.json` file, as you did during s
     - string `model`: A model from your provider. See the guide above for reference.
     - number `temperature`: The model's [temperature](https://platform.openai.com/docs/api-reference/audio/createTranscription#audio-createtranscription-temperature) value, ranging from `0` to `2`.
     - boolean `should_stream`: Whether or not the response should be streamed. If true, responses will be faster as they will be processed and sent by the bot while still being generated. This may not be supported with all models.
-    - array `messages[]`: A list of messages to be inserted at the beginning of every API request. Note that a `system` message containing the date and time, bot name, and other basic instructions is added automatically, placed after this set of messages.
+    - object[] `messages`: An array of message objects to be inserted at the beginning of every API request. Note that a `system` message containing the date and time, bot name, and other basic instructions is added automatically, placed after this set of messages.
         - string `role`: Set to `system`, `assistant`, or `user`. `system` messages can be used to influence the model's behavior and give it information, `assistant` messages are those sent by the model, and `user` messages are those sent by the user.
         - string `content`: The message's text content
     - number `context_msg_count_max`: The maximum number of messages above the prompt message to use as context.
     - number `context_msg_count_min`: The minimum number of messages above the prompt message to use as context, regardless of token usage.
     - number `context_tokens_max`: The minimum number of input tokens that context should use.
+    - object `text_files`: Contains settings related to user-sent text files
+        - boolean `enabled`: Whether or not user-sent text files should be read and processed by the model
+        - string[] `extensions`: An array of attachment file extensions to treat as text files
+        - number `max_bytes`: The max size that text files should be in order to be processed
     - object `vision`: Contains settings for [Vision](https://platform.openai.com/docs/guides/vision) - supported by most `openai` and `google` models
         - boolean `enabled`: Set to `true` to allow supported models to process images.
         - boolean `low_resolution`: Set to `true` to use [low detail mode](https://platform.openai.com/docs/guides/vision/low-or-high-fidelity-image-understanding).

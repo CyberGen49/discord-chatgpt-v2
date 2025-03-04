@@ -112,54 +112,86 @@ module.exports = async msg => {
                     { type: 'text', text: textContent }
                 ]
             };
-            // Add image attachments if vision is enabled
-            if (config.gpt.vision.enabled) {
+            // Process message attachments
                 for (const attachment of entry.attachments.values()) {
-                    if (!attachment.contentType.startsWith('image/')) {
-                        console.log(`Skipping non-image attachment`);
-                        continue;
-                    }
-                    if (attachment.size > 1024*1024*16) {
-                        console.log(`Skipping too large image attachment`);
-                        continue;
-                    }
-                    let imageDataUrl;
-                    try {
-                        // Check if image is cached
-                        let urlHash = utils.md5sum(attachment.url);
-                        if (fs.existsSync(`./cache/${urlHash}`)) {
-                            console.log(`Using cached image from ${attachment.url}...`)
-                            imageDataUrl = `data:${attachment.contentType};base64,${fs.readFileSync(`./cache/${urlHash}`).toString('base64')}`;
-                        } else {
-                            // Download image and save data url
-                            console.log(`Downloading image from ${attachment.url}...`)
-                            const res = await axios.get(attachment.url, { responseType: 'arraybuffer' });
-                            imageDataUrl = `data:${attachment.contentType};base64,${Buffer.from(res.data, 'binary').toString('base64')}`;
-                            // Cache image file
-                            fs.mkdirSync('./cache', { recursive: true });
-                            fs.writeFileSync(`./cache/${urlHash}`, res.data);
+                    const fileExtension = attachment.name.split('.').pop();
+                    const imageExtensions = [ 'png', 'jpg', 'jpeg' ];
+                    const textExtensions = config.gpt.text_files.extensions;
+                    const fileUrlHash = utils.md5sum(attachment.url);
+                    const cachedFilePath = `./cache/${fileUrlHash}`;
+                    const isFileCached = fs.existsSync(cachedFilePath);
+                    // Add image attachments if vision is enabled
+                    if (config.gpt.vision.enabled && imageExtensions.includes(fileExtension)) {
+                        if (attachment.size > 1024*1024*16) {
+                            console.log(`Skipping too large image attachment`);
+                            continue;
                         }
-                    } catch (error) {
-                        console.log(`Image download failed`, error);
-                        continue;
-                    }
-                    const imgHash = utils.md5sum(imageDataUrl);
-                    const dims = {
-                        width: attachment.width,
-                        height: attachment.height
-                    }
-                    if (attachment.contentType.startsWith('image/')) {
-                        inputEntry.content.push({
-                            type: 'image_url',
-                            image_url: {
-                                url: imageDataUrl,
-                                detail: config.gpt.vision.low_resolution ? 'low' : 'auto'
+                        let imageDataUrl;
+                        try {
+                            // Check if image is cached
+                            if (isFileCached) {
+                                console.log(`Using cached image from ${attachment.url}...`)
+                                imageDataUrl = `data:${attachment.contentType};base64,${fs.readFileSync(cachedFilePath).toString('base64')}`;
+                            } else {
+                                // Download image and save data url
+                                console.log(`Downloading image from ${attachment.url}...`)
+                                const res = await axios.get(attachment.url, { responseType: 'arraybuffer' });
+                                imageDataUrl = `data:${attachment.contentType};base64,${Buffer.from(res.data, 'binary').toString('base64')}`;
+                                // Cache image file
+                                fs.mkdirSync('./cache', { recursive: true });
+                                fs.writeFileSync(cachedFilePath, res.data);
                             }
-                        });
-                        utils.imageDimensions[imgHash] = dims;
+                        } catch (error) {
+                            console.log(`Image download failed`, error);
+                            continue;
+                        }
+                        const imgHash = utils.md5sum(imageDataUrl);
+                        const dims = {
+                            width: attachment.width,
+                            height: attachment.height
+                        }
+                        if (attachment.contentType.startsWith('image/')) {
+                            inputEntry.content.push({
+                                type: 'image_url',
+                                image_url: {
+                                    url: imageDataUrl,
+                                    detail: config.gpt.vision.low_resolution ? 'low' : 'auto'
+                                }
+                            });
+                            utils.imageDimensions[imgHash] = dims;
+                        }
+                    // Read and attach text files if enabled
+                    } else if (config.gpt.text_files.enabled && textExtensions.includes(fileExtension)) {
+                        if (attachment.size > config.gpt.text_files.max_bytes) {
+                            console.log(`Skipping too large text file attachment`);
+                            continue;
+                        }
+                        let textContent;
+                        try {
+                            // Check if text file is cached
+                            if (isFileCached) {
+                                console.log(`Using cached text file from ${attachment.url}...`);
+                                textContent = fs.readFileSync(cachedFilePath, 'utf8');
+                            } else {
+                                // Download file
+                                console.log(`Downloading text file from ${attachment.url}...`);
+                                const res = await axios.get(attachment.url);
+                                textContent = res.data;
+                            }
+                        } catch (error) {
+                            console.log(`Text file download failed`, error);
+                            continue;
+                        }
+                        if (textContent) {
+                            inputEntry.content.push({
+                                type: 'text',
+                                text: `Contents of attached file "${attachment.name}":\n\n${textContent}`
+                            });
+                        }
+                    } else {
+                        console.log(`Skipping invalid attachment with extension ${fileExtension}`);
                     }
                 }
-            }
             idsToIndexes[entry.id] = i;
             if (isAssistant) {
                 pendingInput.push({ 
