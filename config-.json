@@ -2,6 +2,7 @@
     "credentials": {
         "openai_secret": "",
         "deepseek_secret": "",
+        "google_secret": "",
         "discord_bot_token": "",
         "discord_application_id": ""
     },
@@ -12,7 +13,7 @@
         "should_stream": true,
         "messages": [{
             "role": "system",
-            "content": "You are a friendly and helpful Discord bot. Make your responses short and concise. Multiple paragraphs will be treated as distinct messages."
+            "content": "You are a friendly and helpful Discord bot."
         }],
         "context_msg_count_max": 100,
         "context_msg_count_min": 2,

@@ -2,9 +2,12 @@ const fs = require('fs');
 const Discord = require('discord.js');
 const gptEncoder = require('gpt-3-encoder');
 const OpenAI = require('openai');
+const crypto = require('crypto');
 const config = require('./config.json');
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+const md5sum = str => crypto.createHash('md5').update(str).digest('hex');
 
 // Count the number of tokens in a string
 const countStringTokens = str => {
@@ -55,7 +58,7 @@ const countTokensInContentEntry = contentEntry => {
     if (contentEntry.type == 'text') {
         return countStringTokens(contentEntry.text);
     } else if (contentEntry.type == 'image_url') {
-        const dims = imageDimensions[contentEntry.image_url.url];
+        const dims = imageDimensions[md5sum(contentEntry.image_url.url)];
         return countImageTokens(dims.width, dims.height);
     }
     return 0;
@@ -187,6 +190,13 @@ const streamChatCompletion = async(opts = streamChatCompletionOpts) => {
                 };
                 break;
             }
+            case 'google': {
+                initOpts = {
+                    baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/',
+                    apiKey: config.credentials.google_secret
+                };
+                break;
+            }
             case 'deepseek': {
                 initOpts = {
                     baseURL: 'https://api.deepseek.com',
@@ -262,6 +272,8 @@ const streamChatCompletion = async(opts = streamChatCompletionOpts) => {
 }
 
 module.exports = {
+    sleep,
+    md5sum,
     countStringTokens,
     adjustImageDimensions,
     imageDimensions,

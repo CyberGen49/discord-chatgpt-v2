@@ -46,8 +46,9 @@ bot.on(Discord.Events.InteractionCreate, require('./interactionHandler'));
 
 bot.login(config.credentials.discord_bot_token);
 
-// Periodically purge old interactions
+// Periodically purge old interactions and cached files
 setInterval(() => {
+    // Purge old interactions
     const interactions = JSON.parse(fs.readFileSync('./interactions.json', 'utf8'));
     const now = Date.now();
     for (const id in interactions.msg_to_file) {
@@ -71,6 +72,18 @@ setInterval(() => {
         }
     }
     fs.writeFileSync('./interactions.json', JSON.stringify(interactions, null, 2));
+    // Purge old cached files
+    const cachedFileNames = fs.readdirSync('./cache');
+    for (const fileName of cachedFileNames) {
+        const filePath = `./cache/${fileName}`;
+        const stats = fs.statSync(filePath);
+        const age = now - stats.mtimeMs;
+        const maxAge = 60 * 60 * 1000; // 1 hour
+        if (age > maxAge) {
+            fs.unlinkSync(filePath);
+            console.log(`Purged cached file ${fileName}`);
+        }
+    }
 }, 60*1000);
 
 module.exports = bot;

@@ -1,6 +1,7 @@
 const Discord = require('discord.js');
 const dayjs = require('dayjs');
 const clc = require('cli-color');
+const axios = require('axios');
 const fs = require('fs');
 const utils = require('./utils');
 const config = require('./config.json');
@@ -54,7 +55,7 @@ module.exports = async msg => {
             ...config.gpt.messages,
             {
                 role: 'system',
-                content: `The current date and time is ${dayjs().format()}. Your name is "${utils.getUserName(bot.user.id, msg.guild)}" and you are chatting as a Discord bot running the ${config.gpt.model} LLM provided by ${config.gpt.provider}. User messages include prefixes to indicate who sent them. Never, under any circumstances, should you prepend these to your own messages. Also never address previous messages in the conversation unless you are directed to reference them.`
+                content: `The current date and time is ${dayjs().format()}. Your name is "${utils.getUserName(bot.user.id, msg.guild)}" and you are chatting as a Discord bot running the ${config.gpt.model} model provided by ${config.gpt.provider}. User messages include prefixes to indicate who sent them. Never, under any circumstances, should you prepend these to your own messages. Also never address previous messages in the conversation unless you are directed to reference them. Each paragraph of your response will be sent as a distinct message to the user.`
             }
         ];
         const isReply = msg.type == Discord.MessageType.Reply;
@@ -114,22 +115,48 @@ module.exports = async msg => {
             // Add image attachments if vision is enabled
             if (config.gpt.vision.enabled) {
                 for (const attachment of entry.attachments.values()) {
-                    if (!attachment.contentType.startsWith('image/')) continue;
-                    if (attachment.size > 1024*1024*16) continue; // 16 MiB
+                    if (!attachment.contentType.startsWith('image/')) {
+                        console.log(`Skipping non-image attachment`);
+                        continue;
+                    }
+                    if (attachment.size > 1024*1024*16) {
+                        console.log(`Skipping too large image attachment`);
+                        continue;
+                    }
+                    let imageDataUrl;
+                    try {
+                        // Check if image is cached
+                        let urlHash = utils.md5sum(attachment.url);
+                        if (fs.existsSync(`./cache/${urlHash}`)) {
+                            console.log(`Using cached image from ${attachment.url}...`)
+                            imageDataUrl = `data:${attachment.contentType};base64,${fs.readFileSync(`./cache/${urlHash}`).toString('base64')}`;
+                        } else {
+                            // Download image and save data url
+                            console.log(`Downloading image from ${attachment.url}...`)
+                            const res = await axios.get(attachment.url, { responseType: 'arraybuffer' });
+                            imageDataUrl = `data:${attachment.contentType};base64,${Buffer.from(res.data, 'binary').toString('base64')}`;
+                            // Cache image file
+                            fs.mkdirSync('./cache', { recursive: true });
+                            fs.writeFileSync(`./cache/${urlHash}`, res.data);
+                        }
+                    } catch (error) {
+                        console.log(`Image download failed`, error);
+                        continue;
+                    }
+                    const imgHash = utils.md5sum(imageDataUrl);
                     const dims = {
                         width: attachment.width,
                         height: attachment.height
                     }
-                    const url = attachment.url;
                     if (attachment.contentType.startsWith('image/')) {
                         inputEntry.content.push({
                             type: 'image_url',
                             image_url: {
-                                url,
+                                url: imageDataUrl,
                                 detail: config.gpt.vision.low_resolution ? 'low' : 'auto'
                             }
                         });
-                        utils.imageDimensions[attachment.url] = dims;
+                        utils.imageDimensions[imgHash] = dims;
                     }
                 }
             }
