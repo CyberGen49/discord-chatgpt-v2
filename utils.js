@@ -259,7 +259,6 @@ const streamChatCompletion = async(opts = streamChatCompletionOpts) => {
             const last = split.pop();
             for (const token of split) {
                 opts.onChunk(token + ' ');
-                await sleep(10);
             }
             opts.onChunk(last);
         }

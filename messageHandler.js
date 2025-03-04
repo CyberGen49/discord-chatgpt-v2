@@ -177,6 +177,9 @@ module.exports = async msg => {
                                 console.log(`Downloading text file from ${attachment.url}...`);
                                 const res = await axios.get(attachment.url);
                                 textContent = res.data;
+                                // Cache file
+                                fs.mkdirSync('./cache', { recursive: true });
+                                fs.writeFileSync(cachedFilePath, res.data);
                             }
                         } catch (error) {
                             console.log(`Text file download failed`, error);
@@ -291,58 +294,87 @@ module.exports = async msg => {
             typingInterval = setInterval(() => {
                 msg.channel.sendTyping();
             }, 5000);
-            // Stream response
+            // Function to process response
             let pendingResponse = '';
-            response = await utils.streamChatCompletion({
-                messages: input,
-                // Handle response chunks as they come in
-                onChunk: chunk => {
-                    response += chunk;
-                    pendingResponse += chunk;
-                    // Queue if response is too long
-                    if (pendingResponse.length > 1900) {
-                        const response = pendingResponse.slice(0, 1900).trim();
-                        pendingResponse = pendingResponse.slice(1900);
-                        queueMsgSend(response, true);
-                        return;
+            const processResponse = () => {
+                // Split response
+                let pendingLines = [];
+                let codeBlockBarrierCount = 0;
+                let codeBlockStartLine = '';
+                const singleLineSplit = utils.replaceConfigPlaceholders(pendingResponse).split('\n');
+                while (true) {
+                    let line = singleLineSplit.shift();
+                    if (line === undefined) break;
+                    // Ensure lines aren't longer than max length
+                    const maxLength = 1980;
+                    if (line.length > maxLength) {
+                        const splitLines = [];
+                        while (line.length > maxLength) {
+                            splitLines.push(line.substring(0, maxLength));
+                            line = line.substring(maxLength);
+                        }
+                        splitLines.push(line);
+                        singleLineSplit.unshift(...splitLines);
+                        continue;
                     }
-                    // Don't do any splitting if disabled
-                    if (!config.bot.split_responses) return;
-                    // Queue code block responses
-                    const singleNewlineSplit = pendingResponse.split('\n');
-                    let tripleBacktickCount = 0;
-                    const codeBlockLines = [];
-                    let shouldReturn = false;
-                    while (singleNewlineSplit.length) {
-                        const line = singleNewlineSplit.shift();
-                        codeBlockLines.push(line);
-                        if (line.includes('```')) {
-                            tripleBacktickCount++;
-                            if (tripleBacktickCount % 2 == 0) {
-                                const response = codeBlockLines.join('\n');
-                                pendingResponse = singleNewlineSplit.join('\n');
-                                queueMsgSend(response, true);
-                            }
-                            shouldReturn = true;
+                    // Push line to pending message
+                    pendingLines.push(line);
+                    // Keep track of code block status (in or out)
+                    if (line.includes('```')) {
+                        codeBlockBarrierCount++;
+                        if (codeBlockBarrierCount % 2 == 1) {
+                            codeBlockStartLine = line;
                         }
                     }
-                    if (shouldReturn) return;
-                    // Queue paragraph responses
-                    const doubleNewlineSplit = pendingResponse.split('\n\n');
-                    if (doubleNewlineSplit.length > 1) {
-                        // Sanitize response
-                        let response = doubleNewlineSplit.shift().trim();
-                        response = utils.replaceConfigPlaceholders(response);
-                        pendingResponse = doubleNewlineSplit.filter(Boolean).join('\n\n');
-                        queueMsgSend(response, true);
-                        return;
+                    // If the message is too long, finish it
+                    // Exit the current code block and start a new one if necessary
+                    if (pendingLines.join('\n').length > maxLength) {
+                        singleLineSplit.unshift(line);
+                        pendingLines.pop();
+                        if (codeBlockStartLine && codeBlockBarrierCount % 2 == 1) {
+                            pendingLines.push('```');
+                            singleLineSplit.unshift(codeBlockStartLine);
+                            codeBlockStartLine = '';
+                            codeBlockBarrierCount = 0;
+                        }
+                        queueMsgSend(pendingLines.join('\n'), true);
+                        pendingLines = [];
+                    }
+                    // Don't do any extra splitting if disabled
+                    if (!config.bot.split_responses) return;
+                    // If a code block has been entered and exited, finish the message
+                    if (codeBlockBarrierCount > 1 && codeBlockBarrierCount % 2 == 0) {
+                        const content = pendingLines.join('\n');
+                        if (content.trim()) {
+                            queueMsgSend(pendingLines.join('\n'), true);
+                            pendingLines = [];
+                            codeBlockBarrierCount = 0;
+                        }
+                    }
+                    // If a blank line is encountered, finish the message
+                    if (line.trim() === '' && codeBlockBarrierCount % 2 == 0) {
+                        const content = pendingLines.join('\n');
+                        if (content.trim()) {
+                            queueMsgSend(pendingLines.join('\n'), true);
+                            pendingLines = [];
+                        }
                     }
                 }
+                const remainingContent = pendingLines.join('\n').trim();
+                pendingResponse = remainingContent;
+            };
+            // Stream response
+            response = await utils.streamChatCompletion({
+                messages: input,
+                onChunk: chunk => {
+                    pendingResponse += chunk;
+                    processResponse();
+                }
             });
+            if (pendingResponse)
+                queueMsgSend(pendingResponse, false);
             // Stop typing indicator interval
             clearInterval(typingInterval);
-            // Queue leftover response
-            if (pendingResponse.trim()) queueMsgSend(utils.replaceConfigPlaceholders(pendingResponse.trim()));
         };
         await generate();
         isGenerationFinished = true;
