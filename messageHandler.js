@@ -55,7 +55,10 @@ module.exports = async msg => {
             ...config.gpt.messages,
             {
                 role: 'system',
-                content: `The current date and time is ${dayjs().format()}. Your name is "${utils.getUserName(bot.user.id, msg.guild)}" and you are chatting as a Discord bot running the ${config.gpt.model} model provided by ${config.gpt.provider}. User messages include prefixes to indicate who sent them. Never, under any circumstances, should you prepend these to your own messages. Also never address previous messages in the conversation unless you are directed to reference them. Each paragraph of your response will be sent as a distinct message to the user.`
+                content: `The current date and time is ${dayjs().format()}. Your name is "${utils.getUserName(bot.user.id, msg.guild)}" and you are chatting as a Discord bot running the \`${config.gpt.model}\` model provided by \`${config.gpt.provider}\`. User messages include prefixes to indicate who sent them. Never, under any circumstances, should you prepend these to your own messages. Also never address previous messages in the conversation unless you are directed to reference them. Each paragraph of your response will be sent as a distinct message to the user.`
+                    + (config.gpt.vision.enabled ? `\n\nYou are able to view and process image files of the types ${config.gpt.vision.extensions.join(', ')} that are smaller than ${config.gpt.vision.max_bytes/1000/1000} MB.` : '')
+                    + (config.gpt.audio.enabled ? `\n\nYou are able to listen to and process audio files of the types ${config.gpt.audio.extensions.join(', ')} that are smaller than ${config.gpt.audio.max_bytes/1000/1000} MB.` : '')
+                    + (config.gpt.text_files.enabled ? `\n\nYou are able to view and process text files of the types ${config.gpt.text_files.extensions.join(', ')} that are smaller than ${config.gpt.text_files.max_bytes/1000} KB.` : '')
             }
         ];
         const isReply = msg.type == Discord.MessageType.Reply;
@@ -113,91 +116,142 @@ module.exports = async msg => {
                 ]
             };
             // Process message attachments
-                for (const attachment of entry.attachments.values()) {
-                    const fileExtension = attachment.name.split('.').pop();
-                    const imageExtensions = [ 'png', 'jpg', 'jpeg' ];
-                    const textExtensions = config.gpt.text_files.extensions;
-                    const fileUrlHash = utils.md5sum(attachment.url);
-                    const cachedFilePath = `./cache/${fileUrlHash}`;
-                    const isFileCached = fs.existsSync(cachedFilePath);
-                    // Add image attachments if vision is enabled
-                    if (config.gpt.vision.enabled && imageExtensions.includes(fileExtension)) {
-                        if (attachment.size > 1024*1024*16) {
-                            console.log(`Skipping too large image attachment`);
-                            continue;
+            for (const attachment of entry.attachments.values()) {
+                const fileExtension = attachment.name.split('.').pop();
+                const imageExtensions = config.gpt.vision.extensions;
+                const audioExtensions = config.gpt.audio.extensions;
+                const textExtensions = config.gpt.text_files.extensions;
+                const fileUrlHash = utils.md5sum(attachment.url);
+                const cachedFilePath = `./cache/${fileUrlHash}`;
+                const isFileCached = fs.existsSync(cachedFilePath);
+                // Add image attachments if vision is enabled
+                if (config.gpt.vision.enabled && imageExtensions.includes(fileExtension)) {
+                    if (attachment.size > config.gpt.vision.max_bytes) {
+                        console.log(`Skipping too large image attachment`);
+                        inputEntry.content.push({
+                            type: 'text',
+                            text: `Attached image is too large to process`
+                        });
+                        continue;
+                    }
+                    let imageDataUrl;
+                    try {
+                        // Check if image is cached
+                        if (isFileCached) {
+                            console.log(`Using cached image from ${attachment.url}...`)
+                            imageDataUrl = `data:${attachment.contentType};base64,${fs.readFileSync(cachedFilePath).toString('base64')}`;
+                        } else {
+                            // Download image and save data url
+                            console.log(`Downloading image from ${attachment.url}...`)
+                            const res = await axios.get(attachment.url, { responseType: 'arraybuffer' });
+                            imageDataUrl = `data:${attachment.contentType};base64,${Buffer.from(res.data, 'binary').toString('base64')}`;
+                            // Cache image file
+                            fs.mkdirSync('./cache', { recursive: true });
+                            fs.writeFileSync(cachedFilePath, res.data);
                         }
-                        let imageDataUrl;
-                        try {
-                            // Check if image is cached
-                            if (isFileCached) {
-                                console.log(`Using cached image from ${attachment.url}...`)
-                                imageDataUrl = `data:${attachment.contentType};base64,${fs.readFileSync(cachedFilePath).toString('base64')}`;
-                            } else {
-                                // Download image and save data url
-                                console.log(`Downloading image from ${attachment.url}...`)
-                                const res = await axios.get(attachment.url, { responseType: 'arraybuffer' });
-                                imageDataUrl = `data:${attachment.contentType};base64,${Buffer.from(res.data, 'binary').toString('base64')}`;
-                                // Cache image file
-                                fs.mkdirSync('./cache', { recursive: true });
-                                fs.writeFileSync(cachedFilePath, res.data);
-                            }
-                        } catch (error) {
-                            console.log(`Image download failed`, error);
-                            continue;
+                    } catch (error) {
+                        console.log(`Image download failed`, error);
+                        continue;
+                    }
+                    const imgHash = utils.md5sum(imageDataUrl);
+                    const dims = {
+                        width: attachment.width,
+                        height: attachment.height
+                    }
+                    inputEntry.content.push({
+                        type: 'image_url',
+                        image_url: {
+                            url: imageDataUrl,
+                            detail: config.gpt.vision.low_resolution ? 'low' : 'auto'
                         }
-                        const imgHash = utils.md5sum(imageDataUrl);
-                        const dims = {
-                            width: attachment.width,
-                            height: attachment.height
+                    });
+                    utils.imageDimensions[imgHash] = dims;
+                }
+                // Add audio attachments if vision is enabled
+                else if (config.gpt.audio.enabled && audioExtensions.includes(fileExtension)) {
+                    if (attachment.size > config.gpt.audio.max_bytes) {
+                        console.log(`Skipping too large audio attachment`);
+                        inputEntry.content.push({
+                            type: 'text',
+                            text: `Attached audio file is too large to process`
+                        });
+                        continue;
+                    }
+                    let audioBase64;
+                    try {
+                        // Check if image is cached
+                        if (isFileCached) {
+                            console.log(`Using cached audio file from ${attachment.url}...`)
+                            audioBase64 = fs.readFileSync(cachedFilePath).toString('base64');
+                        } else {
+                            // Download image and save data url
+                            console.log(`Downloading audio file from ${attachment.url}...`)
+                            const res = await axios.get(attachment.url, { responseType: 'arraybuffer' });
+                            audioBase64 = Buffer.from(res.data, 'binary').toString('base64');
+                            // Cache image file
+                            fs.mkdirSync('./cache', { recursive: true });
+                            fs.writeFileSync(cachedFilePath, res.data);
                         }
-                        if (attachment.contentType.startsWith('image/')) {
-                            inputEntry.content.push({
-                                type: 'image_url',
-                                image_url: {
-                                    url: imageDataUrl,
-                                    detail: config.gpt.vision.low_resolution ? 'low' : 'auto'
-                                }
-                            });
-                            utils.imageDimensions[imgHash] = dims;
+                    } catch (error) {
+                        console.log(`Audio file download failed`, error);
+                        continue;
+                    }
+                    inputEntry.content.push({
+                        type: 'input_audio',
+                        input_audio: {
+                            data: audioBase64,
+                            format: fileExtension.toLowerCase()
                         }
-                    // Read and attach text files if enabled
-                    } else if (config.gpt.text_files.enabled && textExtensions.includes(fileExtension)) {
-                        if (attachment.size > config.gpt.text_files.max_bytes) {
-                            console.log(`Skipping too large text file attachment`);
-                            continue;
+                    });
+                }
+                // Read and attach text files if enabled
+                else if (config.gpt.text_files.enabled && textExtensions.includes(fileExtension)) {
+                    if (attachment.size > config.gpt.text_files.max_bytes) {
+                        console.log(`Skipping too large text file attachment`);
+                        inputEntry.content.push({
+                            type: 'text',
+                            text: `Attached text file "${attachment.name}" is too large to process`
+                        });
+                        continue;
+                    }
+                    let textContent;
+                    try {
+                        // Check if text file is cached
+                        if (isFileCached) {
+                            console.log(`Using cached text file from ${attachment.url}...`);
+                            textContent = fs.readFileSync(cachedFilePath, 'utf8');
+                        } else {
+                            // Download file
+                            console.log(`Downloading text file from ${attachment.url}...`);
+                            const res = await axios.get(attachment.url);
+                            textContent = res.data;
+                            // Cache file
+                            fs.mkdirSync('./cache', { recursive: true });
+                            fs.writeFileSync(cachedFilePath, res.data);
                         }
-                        let textContent;
-                        try {
-                            // Check if text file is cached
-                            if (isFileCached) {
-                                console.log(`Using cached text file from ${attachment.url}...`);
-                                textContent = fs.readFileSync(cachedFilePath, 'utf8');
-                            } else {
-                                // Download file
-                                console.log(`Downloading text file from ${attachment.url}...`);
-                                const res = await axios.get(attachment.url);
-                                textContent = res.data;
-                                // Cache file
-                                fs.mkdirSync('./cache', { recursive: true });
-                                fs.writeFileSync(cachedFilePath, res.data);
-                            }
-                        } catch (error) {
-                            console.log(`Text file download failed`, error);
-                            continue;
-                        }
-                        if (textContent) {
-                            inputEntry.content.push({
-                                type: 'text',
-                                text: `Contents of attached file "${attachment.name}":\n\n${textContent}`
-                            });
-                        }
-                    } else {
-                        console.log(`Skipping invalid attachment with extension ${fileExtension}`);
+                    } catch (error) {
+                        console.log(`Text file download failed`, error);
+                        continue;
+                    }
+                    if (textContent) {
+                        inputEntry.content.push({
+                            type: 'text',
+                            text: `Contents of attached file "${attachment.name}":\n\n${textContent}`
+                        });
                     }
                 }
+                // Make note of the unsupported attachment in context
+                else {
+                    console.log(`Skipping unsupported attachment with extension ${fileExtension}`);
+                    inputEntry.content.push({
+                        type: 'text',
+                        text: `Attached file "${attachment.name}" is of an unsupported type`
+                    });
+                }
+            }
             idsToIndexes[entry.id] = i;
             if (isAssistant) {
-                pendingInput.push({ 
+                pendingInput.push({
                     role: 'system', content: [ { type: 'text', text: meta } ]
                 });
             }

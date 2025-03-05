@@ -31,6 +31,7 @@
         },
         "vision": {
             "enabled": false,
+            "extensions": [ "png", "jpg", "jpeg", "gif", "webp", "heic", "heif" ],
             "low_resolution": false,
             "tokens_base": 85,
             "tokens_per_tile": 170,
@@ -39,6 +40,10 @@
                 "long_side": 2048
             },
             "tile_size": 512
+        },
+        "audio": {
+            "enabled": false,
+            "extensions": [ "mp3", "wav", "ogg", "aiff", "aac", "flac" ]
         },
         "replacements": {
             "\\times": "×",

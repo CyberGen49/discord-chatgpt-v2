@@ -58,11 +58,13 @@ The bot can be configured by editing the `config.json` file, as you did during s
     - number `context_msg_count_min`: The minimum number of messages above the prompt message to use as context, regardless of token usage.
     - number `context_tokens_max`: The minimum number of input tokens that context should use.
     - object `text_files`: Contains settings related to user-sent text files
-        - boolean `enabled`: Whether or not user-sent text files should be read and processed by the model
-        - string[] `extensions`: An array of attachment file extensions to treat as text files
-        - number `max_bytes`: The max size that text files should be in order to be processed
+        - boolean `enabled`: Whether or not user-sent text files should be read and processed by the model.
+        - string[] `extensions`: An array of attachment file extensions to treat as text files.
+        - number `max_bytes`: The max size that text files can be in order to be processed.
     - object `vision`: Contains settings for [Vision](https://platform.openai.com/docs/guides/vision) - supported by most `openai` and `google` models
         - boolean `enabled`: Set to `true` to allow supported models to process images.
+        - string[] `extensions`: An array of image file extensions to allow the model to view.
+        - number `max_bytes`: The max size that image files can be in order to be processed.
         - boolean `low_resolution`: Set to `true` to use [low detail mode](https://platform.openai.com/docs/guides/vision/low-or-high-fidelity-image-understanding).
         - number `tokens_base`: The number of tokens used by every image regardless of resolution. Update this value to match your model's specifications.
         - number `tokens_per_tile`: The number of tokens used by each `tile_size`x tile of a high resolution image (after resizing). This doesn't apply when `low_resolution` is enabled. Update this value to match your model's specifications.
@@ -70,6 +72,10 @@ The bot can be configured by editing the `config.json` file, as you did during s
             - number `short_side`: The short side length
             - number `long_side`: The long side length
         - number `tile_size`: The length of one side of a high-res image tile.
+    - object `audio`: Contains settings for [Audio understanding](https://ai.google.dev/gemini-api/docs/audio?lang=node) - supported only by `google` models
+        - boolean `enabled`: Set to `true` to allow supported models to process audio files.
+        - string[] `extensions`: An array of audio file extensions to allow the model to view.
+        - number `max_bytes`: The max size that audio files can be in order to be processed.
     - object `replacements`: Contains key-value pairs for strings to replace with other strings in model responses, where the key is the target string and the value is the replacement string. By default, this is used to replace common LaTeX control strings with their respective Unicode characters.
     - boolean `ignore_bots`: Whether or not bot messages (not from this bot) should be excluded from context provided to the model.
 - object `bot`: Contains settings for the Discord bot
