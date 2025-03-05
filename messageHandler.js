@@ -223,7 +223,7 @@ module.exports = async msg => {
                         } else {
                             // Download file
                             console.log(`Downloading text file from ${attachment.url}...`);
-                            const res = await axios.get(attachment.url);
+                            const res = await axios.get(attachment.url, { responseType: 'text' });
                             textContent = res.data;
                             // Cache file
                             fs.mkdirSync('./cache', { recursive: true });
