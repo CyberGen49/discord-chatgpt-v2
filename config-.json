@@ -31,6 +31,7 @@
         },
         "vision": {
             "enabled": false,
+            "max_bytes": 16000000,
             "extensions": [ "png", "jpg", "jpeg", "gif", "webp", "heic", "heif" ],
             "low_resolution": false,
             "tokens_base": 85,
@@ -43,6 +44,7 @@
         },
         "audio": {
             "enabled": false,
+            "max_bytes": 16000000,
             "extensions": [ "mp3", "wav", "ogg", "aiff", "aac", "flac" ]
         },
         "replacements": {
@@ -140,8 +142,9 @@
         "dm_user_blocked": "You have been blocked from talking to me. Contact the bot owner if you think this is a mistake.",
         "users_user_allowed": "**{user}** is now allowed to use the bot.",
         "users_user_blocked": "**{user}** is now blocked from using the bot.",
-        "users_user_unlisted": "**{user}** has been removed from the user list. The `config.public_usage` setting will now apply to their usage.",
+        "users_user_unlisted": "**{user}** has been removed from the user list. The `access.public_usage` setting will now apply to their usage.",
         "barrier": "Context barrier created. Messages above this one will be ignored by the bot.",
-        "invite": "Click [here]({url}) to add me to your server!"
+        "invite": "Click [here]({url}) to add me to your server!",
+        "restart_confirm": "The bot will restart now."
     }
 }
