@@ -400,22 +400,22 @@ module.exports = async msg => {
                     // If a code block has been entered and exited, finish the message
                     if (codeBlockBarrierCount > 1 && codeBlockBarrierCount % 2 == 0) {
                         const content = pendingLines.join('\n');
-                        if (content.trim()) {
+                        if (content) {
                             queueMsgSend(pendingLines.join('\n'), true);
                             pendingLines = [];
                             codeBlockBarrierCount = 0;
                         }
                     }
                     // If a blank line is encountered, finish the message
-                    if (line.trim() === '' && codeBlockBarrierCount % 2 == 0) {
-                        const content = pendingLines.join('\n').trim();
-                        if (content) {
+                    if (line === '' && codeBlockBarrierCount % 2 == 0) {
+                        const content = pendingLines.join('\n');
+                        if (content.trim()) {
                             queueMsgSend(content, true);
                             pendingLines = [];
                         }
                     }
                 }
-                const remainingContent = pendingLines.join('\n').trim();
+                const remainingContent = pendingLines.join('\n');
                 pendingResponse = remainingContent;
             };
             // Stream response
