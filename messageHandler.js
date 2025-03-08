@@ -350,7 +350,7 @@ module.exports = async msg => {
             }, 5000);
             // Function to process response
             let pendingResponse = '';
-            const processResponse = () => {
+            const processPending = () => {
                 // Split response
                 let pendingLines = [];
                 let codeBlockBarrierCount = 0;
@@ -374,8 +374,9 @@ module.exports = async msg => {
                     // Push line to pending message
                     pendingLines.push(line);
                     // Keep track of code block status (in or out)
-                    if (line.includes('```')) {
-                        codeBlockBarrierCount++;
+                    const codeBlockBarrierCountCurrentLine = line.split('```').length - 1;
+                    if (codeBlockBarrierCountCurrentLine) {
+                        codeBlockBarrierCount += codeBlockBarrierCountCurrentLine;
                         if (codeBlockBarrierCount % 2 == 1) {
                             codeBlockStartLine = line;
                         }
@@ -407,9 +408,9 @@ module.exports = async msg => {
                     }
                     // If a blank line is encountered, finish the message
                     if (line.trim() === '' && codeBlockBarrierCount % 2 == 0) {
-                        const content = pendingLines.join('\n');
-                        if (content.trim()) {
-                            queueMsgSend(pendingLines.join('\n'), true);
+                        const content = pendingLines.join('\n').trim();
+                        if (content) {
+                            queueMsgSend(content, true);
                             pendingLines = [];
                         }
                     }
@@ -422,7 +423,7 @@ module.exports = async msg => {
                 messages: input,
                 onChunk: chunk => {
                     pendingResponse += chunk;
-                    processResponse();
+                    processPending();
                 }
             });
             if (pendingResponse)
